@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowUp, Hash, Users, User, Search, Plus, Smile, Paperclip, Image, UserPlus, X, Lock, KeyRound, Mic, Video as VideoIcon, Trash2, Download, FileText, Reply, Pin, SmilePlus, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowUp, Hash, Users, User, Search, Plus, Smile, Paperclip, Image, UserPlus, X, Lock, KeyRound, Mic, Video as VideoIcon, Trash2, Download, FileText, Reply, Pin, SmilePlus, ChevronDown, ChevronUp, Crown, Copy, Bot, Phone } from 'lucide-react';
 import { api } from '../lib/api.js';
-import { Spinner } from '../components/ui.jsx';
+import { Spinner, Modal } from '../components/ui.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { useCall } from '../hooks/useCall.js';
+import CallOverlay from '../components/CallOverlay.jsx';
 
 const TABS = [
   { key: 'channels', icon: Hash, label: 'Kanallar' },
@@ -24,10 +26,25 @@ const DEF_CHANNELS = [
   { key: 'Koreys tili', icon: '🇰🇷' },
 ];
 
-const EMOJIS = ['😊','👍','❤️','🔥','👏','💪','✅','⭐','🎉','😂','🙏','💯','📚','✍️','🏆','💡','🎓','👋','😍','🤔'];
+const EMOJIS = ['😊','👍','❤️','🔥','👏','💪','✅','⭐','🎉','😂','🙏','💯','📚','✍️','🏆','💡','🎓','👋','😍','🤔',
+  '😁','🥳','😢','😮','🤝','👌','💥','🌟','🎊','🚀','☕','🍀','🎁','📌','⏰','💤','😴','🤗','😎','👑'];
 const QUICK_REACTIONS = ['👍','❤️','😂','🔥','😮','🙏'];
+const ROOM_ICONS = ['#️⃣','👥','📚','🎓','💬','🎯','🎨','⚽','🎵','🔬','🌟','🏆','🎮','💻','🇺🇸','🇰🇷','📝','🧮'];
 
 const BOT_NAME = 'ISO Termizy AI';
+const PREMIUM_PLANS = [
+  { key: '1m', label: '1 oy', coins: 300 },
+  { key: '3m', label: '3 oy', coins: 800, save: "11% chegirma" },
+  { key: '6m', label: '6 oy', coins: 1500, save: "17% chegirma", popular: true },
+  { key: '12m', label: '1 yil', coins: 2700, save: "25% chegirma" },
+];
+
+function genInviteCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
 
 const COLORS = ['from-blue-500 to-blue-700','from-emerald-500 to-emerald-700','from-violet-500 to-violet-700','from-amber-500 to-amber-700','from-rose-500 to-rose-700','from-cyan-500 to-cyan-700'];
 
@@ -96,8 +113,22 @@ export default function GroupChat() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [reactionPickerFor, setReactionPickerFor] = useState(null);
+  const [whoReacted, setWhoReacted] = useState(null); // { msgId, emoji }
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [recorder, setRecorder] = useState(null); // { kind: 'audio'|'video', seconds }
+  const [newIcon, setNewIcon] = useState(ROOM_ICONS[0]);
+  const [customEmojis, setCustomEmojis] = useState([]);
+  const [newEmojiInput, setNewEmojiInput] = useState('');
+  const [premiumMembers, setPremiumMembers] = useState([]);
+  const [showPremium, setShowPremium] = useState(false);
+  const [buyingPremium, setBuyingPremium] = useState(false);
+  const [premiumErr, setPremiumErr] = useState('');
+  const [people, setPeople] = useState([]);
+  const [chatBots, setChatBots] = useState([]);
+  const [showAddBot, setShowAddBot] = useState(false);
+  const [newBotName, setNewBotName] = useState('');
+  const [newBotIcon, setNewBotIcon] = useState('🤖');
+  const [newBotPersona, setNewBotPersona] = useState('');
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const videoRef = useRef(null);
@@ -108,21 +139,41 @@ export default function GroupChat() {
 
   const isAdmin = ['founder','director','super_admin','branch_manager','admin','academic_manager','head_teacher'].includes(user.role);
   const isStaff = !['student', 'parent', 'guest'].includes(user.role);
+  const myStudentRole = user.role === 'student';
 
   async function load() {
-    const [msgs, users, gr, mem, rooms] = await Promise.all([
+    const [msgs, users, gr, mem, rooms, emojis, premium, people, bots] = await Promise.all([
       api.get('/chat_messages').catch(() => []),
       api.get('/staff').catch(() => []),
       api.get('/groups').catch(() => []),
       api.get('/group_memberships').catch(() => []),
       api.get('/chat_rooms').catch(() => []),
+      api.get('/chat_custom_emojis').catch(() => []),
+      api.get('/chat_premium').catch(() => []),
+      api.get('/people').catch(() => []),
+      api.get('/chat_bots').catch(() => []),
     ]);
     setMessages(msgs || []);
     setAllUsers(users || []);
     setGroups(gr || []);
     setMemberships((mem || []).map(m => m.group_name));
     setChatRooms(rooms || []);
+    setCustomEmojis(emojis || []);
+    setPremiumMembers(premium || []);
+    setPeople(people || []);
+    setChatBots(bots || []);
   }
+
+  const nowStr = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const isPremium = (name) => premiumMembers.some(p => p.student === name && p.expires_at > nowStr());
+  const allEmojis = useMemo(() => [...EMOJIS, ...customEmojis.map(e => e.emoji).filter(Boolean)], [customEmojis]);
+  const personByName = useMemo(() => {
+    const map = {};
+    for (const p of people) map[p.full_name] = p;
+    return map;
+  }, [people]);
+  const avatarUrlFor = (name) => personByName[name]?.avatar_url || '';
+  const bioFor = (name) => personByName[name]?.bio || '';
 
   useEffect(() => { load(); const iv = setInterval(load, 4000); return () => clearInterval(iv); }, []);
   useEffect(() => { setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100); }, [messages, channel]);
@@ -154,21 +205,40 @@ export default function GroupChat() {
 
   const botKey = useMemo(() => `DM:${[user.full_name, BOT_NAME].sort().join(':')}`, [user.full_name]);
 
-  const customChannels = useMemo(() => chatRooms.filter(r => r.type === 'channel').map(r => ({ key: r.name, icon: r.icon || '#️⃣', roomId: r.id })), [chatRooms]);
-  const customGroups = useMemo(() => chatRooms.filter(r => r.type === 'group').map(r => ({ key: r.name, icon: r.icon || '👥', roomId: r.id })), [chatRooms]);
+  // Asosiy ISO Termizy AI + admin qo'shgan qo'shimcha botlar — barchasi "Shaxsiy" bo'limida DM sifatida chiqadi.
+  const botEntries = useMemo(() => {
+    const defaultBot = { key: botKey, icon: '🤖', label: BOT_NAME, role: 'AI yordamchi', isBot: true, persona: null, botId: null };
+    const extra = chatBots.map((b) => ({
+      key: `DM:${[user.full_name, b.name].sort().join(':')}`, icon: b.icon || '🤖', label: b.name,
+      role: 'AI bot', isBot: true, persona: b.persona, botId: b.id,
+    }));
+    return [defaultBot, ...extra];
+  }, [chatBots, botKey, user.full_name]);
+
+  const customChannels = useMemo(() => chatRooms.filter(r => r.type === 'channel').map(r => ({ key: r.name, icon: r.icon || '#️⃣', roomId: r.id, inviteCode: r.invite_code, createdBy: r.created_by })), [chatRooms]);
+  const customGroups = useMemo(() => chatRooms.filter(r => r.type === 'group').map(r => ({ key: r.name, icon: r.icon || '👥', roomId: r.id, inviteCode: r.invite_code, createdBy: r.created_by })), [chatRooms]);
 
   const items = useMemo(() => {
     if (tab === 'channels') return [...visibleChannels, ...customChannels];
     if (tab === 'groups') return [...groupItems, ...customGroups];
     const humans = allUsers.filter(u2 => u2.full_name !== user.full_name)
-      .map(u2 => ({ key: `DM:${[user.full_name, u2.full_name].sort().join(':')}`, icon: '👤', label: u2.full_name, role: u2.role_label }));
-    const bot = { key: botKey, icon: '🤖', label: BOT_NAME, role: 'AI yordamchi' };
-    return [bot, ...humans];
-  }, [tab, allUsers, customChannels, customGroups, user, visibleChannels, groupItems, botKey]);
+      .map(u2 => ({ key: `DM:${[user.full_name, u2.full_name].sort().join(':')}`, icon: '👤', label: u2.full_name, role: u2.role_label, avatarUrl: u2.avatar_url }));
+    return [...botEntries, ...humans];
+  }, [tab, allUsers, customChannels, customGroups, user, visibleChannels, groupItems, botEntries]);
 
-  const isBotChannel = tab === 'private' && channel === botKey;
+  const activeBot = useMemo(() => botEntries.find((b) => b.key === channel), [botEntries, channel]);
+  const isBotChannel = tab === 'private' && !!activeBot;
+  const botIconByName = useMemo(() => {
+    const map = {};
+    for (const b of botEntries) map[b.label] = b.icon;
+    return map;
+  }, [botEntries]);
 
-  const isLocked = tab === 'groups' && !isStaff && !isAdmin && !memberships.includes(channel) && groups.some(g => g.name === channel);
+  const customGroupRoom = useMemo(() => chatRooms.find(r => r.type === 'group' && r.name === channel), [chatRooms, channel]);
+  const isLocked = tab === 'groups' && !isStaff && !isAdmin && !memberships.includes(channel)
+    && customGroupRoom?.created_by !== user.full_name
+    && (groups.some(g => g.name === channel) || !!customGroupRoom);
+  const currentInviteCode = groups.find(g => g.name === channel)?.invite_code || customGroupRoom?.invite_code;
 
   async function joinGroup() {
     setJoinErr(''); setJoining(true);
@@ -209,7 +279,7 @@ export default function GroupChat() {
     const msg = extraText || text.trim();
     if (!msg || sending) return;
     setSending(true);
-    const askBot = isBotChannel;
+    const bot = activeBot;
     try {
       await api.post('/chat_messages', {
         channel, sender: user.full_name, sender_role: user.role,
@@ -221,18 +291,18 @@ export default function GroupChat() {
       setShowEmoji(false);
       setReplyingTo(null);
       await load();
-      if (askBot) {
+      if (bot) {
         setBotTyping(true);
         const history = (messages || [])
-          .filter((m) => m.channel === botKey)
+          .filter((m) => m.channel === bot.key)
           .slice(-12)
-          .map((m) => ({ role: m.sender === BOT_NAME ? 'assistant' : 'user', content: m.text }));
+          .map((m) => ({ role: m.sender === bot.label ? 'assistant' : 'user', text: m.text }));
         let reply = '';
         try {
-          await api.aiChatStream({ message: msg, history, session: `chat-bot-${user.full_name}` }, (full) => { reply = full; });
+          await api.aiChatStream({ message: msg, history, session: `chat-bot-${bot.botId || 'default'}-${user.full_name}`, persona: bot.persona || undefined }, (full) => { reply = full; });
         } catch (e) { reply = "Kechirasiz, hozir javob bera olmadim. Birozdan so'ng qayta urinib ko'ring."; }
         await api.post('/chat_messages', {
-          channel: botKey, sender: BOT_NAME, sender_role: 'bot',
+          channel: bot.key, sender: bot.label, sender_role: 'bot',
           text: reply || '...',
           timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
         }).catch(() => {});
@@ -248,6 +318,27 @@ export default function GroupChat() {
 
   async function togglePin(m) {
     await api.put(`/chat_messages/${m.id}/pin`, {}).catch(() => {});
+    await load();
+  }
+
+  const myPremiumActive = isPremium(user.full_name);
+
+  async function buyPremium(planKey) {
+    setPremiumErr(''); setBuyingPremium(planKey);
+    try {
+      await api.post('/chat-premium/buy', { plan: planKey });
+      await load();
+    } catch (e) { setPremiumErr(e.message); }
+    setBuyingPremium(false);
+  }
+
+  async function deleteMessage(m) {
+    if (!confirm("Xabarni o'chirmoqchimisiz?")) return;
+    await api.del(`/chat_messages/${m.id}`).catch(() => {});
+    if (m.media_url) {
+      const filename = m.media_url.split('/').pop();
+      await api.del(`/uploads/${filename}`).catch(() => {});
+    }
     await load();
   }
 
@@ -333,7 +424,13 @@ export default function GroupChat() {
       mr.start();
       mediaRecorderRef.current = mr;
       setRecorder({ kind, seconds: 0 });
-      timerRef.current = setInterval(() => setRecorder((r) => r ? { ...r, seconds: r.seconds + 1 } : r), 1000);
+      // Video xabarlar Telegramdek maksimum 2 daqiqa bilan cheklangan — vaqt tugaganda avtomatik yuboriladi.
+      timerRef.current = setInterval(() => setRecorder((r) => {
+        if (!r) return r;
+        const next = r.seconds + 1;
+        if (kind === 'video' && next >= 120) { setTimeout(() => finishRecording(), 0); return r; }
+        return { ...r, seconds: next };
+      }), 1000);
     } catch (err) {
       alert("Mikrofon/kameraga ruxsat berilmadi: " + err.message);
     }
@@ -405,12 +502,13 @@ export default function GroupChat() {
       await api.post('/chat_rooms', {
         type: tab === 'channels' ? 'channel' : 'group',
         name: newName.trim(),
-        icon: tab === 'channels' ? '#️⃣' : '👥',
+        icon: newIcon,
         created_by: user.full_name,
         date: new Date().toISOString().slice(0, 10),
+        invite_code: genInviteCode(),
       });
       setChannel(newName.trim());
-      setShowNew(false); setNewName('');
+      setShowNew(false); setNewName(''); setNewIcon(ROOM_ICONS[0]);
       await load();
     } catch (e) { alert(e.message); }
   }
@@ -418,6 +516,10 @@ export default function GroupChat() {
   const displayChannel = tab === 'private'
     ? channel.replace('DM:', '').split(':').find(n => n !== user.full_name) || channel
     : channel;
+
+  // Qo'ng'iroq faqat shaxsiy (bot bo'lmagan) suhbatlarda mumkin.
+  const callPeerName = (tab === 'private' && !isBotChannel && channel.startsWith('DM:')) ? displayChannel : null;
+  const call = useCall({ channel, peerName: callPeerName, myName: user.full_name, enabled: !!callPeerName });
 
   const msgCount = ch => (messages || []).filter(m => m.channel === ch).length;
 
@@ -455,7 +557,11 @@ export default function GroupChat() {
                   onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setChannel(it.key)}
                   className={`group w-full flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left transition cursor-pointer ${
                     on ? 'bg-[#E9E9EB]' : 'hover:bg-navy-100/50'}`}>
-                  <span className="grid place-items-center w-10 h-10 rounded-full bg-white shadow-sm text-lg shrink-0">{it.icon}</span>
+                  {it.avatarUrl ? (
+                    <img src={api.fileUrl(it.avatarUrl)} alt={it.label} className="w-10 h-10 rounded-full object-cover shadow-sm shrink-0" />
+                  ) : (
+                    <span className="grid place-items-center w-10 h-10 rounded-full bg-white shadow-sm text-lg shrink-0">{it.icon}</span>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-semibold text-[#1c1c1e] truncate">{it.label || it.key}</div>
                     {it.role && <div className="text-[10px] text-navy-400 truncate">{it.role}</div>}
@@ -471,6 +577,16 @@ export default function GroupChat() {
                       <X size={12} />
                     </button>
                   )}
+                  {isAdmin && it.botId && (
+                    <button onClick={async (e) => {
+                      e.stopPropagation();
+                      if (!confirm("Botni o'chirmoqchimisiz?")) return;
+                      await api.del(`/chat_bots/${it.botId}`).catch(() => {});
+                      await load();
+                    }} className="opacity-0 group-hover:opacity-100 text-navy-300 hover:text-red-500 shrink-0" title="Botni o'chirish">
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -480,6 +596,14 @@ export default function GroupChat() {
             <div className="p-1.5 border-t border-navy-100">
               {showNew ? (
                 <div className="p-1.5">
+                  <div className="flex flex-wrap gap-1 mb-1.5 p-1.5 bg-navy-50 rounded-xl">
+                    {ROOM_ICONS.map(ic => (
+                      <button key={ic} onClick={() => setNewIcon(ic)}
+                        className={`grid place-items-center w-6 h-6 rounded-lg text-sm transition ${newIcon === ic ? 'bg-gold/20 ring-1 ring-gold' : 'hover:bg-white'}`}>
+                        {ic}
+                      </button>
+                    ))}
+                  </div>
                   <input className="input !py-1 text-xs mb-1.5" placeholder="Nom..." autoFocus
                     value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNew()} />
                   <div className="flex gap-1">
@@ -495,26 +619,84 @@ export default function GroupChat() {
               )}
             </div>
           )}
+
+          {tab === 'private' && isAdmin && (
+            <div className="p-1.5 border-t border-navy-100">
+              {showAddBot ? (
+                <div className="p-1.5">
+                  <div className="flex flex-wrap gap-1 mb-1.5 p-1.5 bg-navy-50 rounded-xl">
+                    {['🤖','🧠','📖','✍️','🗣️','🎯','💡','🌟'].map(ic => (
+                      <button key={ic} onClick={() => setNewBotIcon(ic)}
+                        className={`grid place-items-center w-6 h-6 rounded-lg text-sm transition ${newBotIcon === ic ? 'bg-gold/20 ring-1 ring-gold' : 'hover:bg-white'}`}>
+                        {ic}
+                      </button>
+                    ))}
+                  </div>
+                  <input className="input !py-1 text-xs mb-1.5" placeholder="Bot nomi..."
+                    value={newBotName} onChange={e => setNewBotName(e.target.value)} />
+                  <textarea className="input !py-1 text-xs mb-1.5 resize-none" rows={2} placeholder="Persona (masalan: Siz grammatikadan yordam beruvchi qat'iy o'qituvchisiz...)"
+                    value={newBotPersona} onChange={e => setNewBotPersona(e.target.value)} />
+                  <div className="flex gap-1">
+                    <button onClick={() => setShowAddBot(false)} className="btn-ghost flex-1 text-[10px] !py-1">Bekor</button>
+                    <button onClick={async () => {
+                      if (!newBotName.trim()) return;
+                      await api.post('/chat_bots', { name: newBotName.trim(), icon: newBotIcon, persona: newBotPersona.trim(), created_by: user.full_name, date: new Date().toISOString().slice(0, 10) }).catch((e) => alert(e.message));
+                      setShowAddBot(false); setNewBotName(''); setNewBotPersona(''); setNewBotIcon('🤖');
+                      await load();
+                    }} className="btn-gold flex-1 text-[10px] !py-1">Yaratish</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowAddBot(true)}
+                  className="w-full flex items-center justify-center gap-1 rounded-lg border border-dashed border-navy-200 px-2 py-1.5 text-[10px] text-navy-500 hover:border-gold hover:text-gold-600 transition">
+                  <Plus size={12} /> Yangi bot
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Chat */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="px-4 py-2.5 border-b border-navy-100 flex items-center gap-3 bg-white/50">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="font-bold text-navy-800">{displayChannel}</div>
-              <div className="text-[10px] text-navy-400">{filtered.length} xabar · {members.length} a'zo</div>
+              {tab === 'private' && !isBotChannel && bioFor(displayChannel) ? (
+                <div className="text-[10px] text-navy-400 truncate">{bioFor(displayChannel)}</div>
+              ) : (
+                <div className="text-[10px] text-navy-400">{filtered.length} xabar · {members.length} a'zo</div>
+              )}
             </div>
-            {tab === 'groups' && isStaff && groups.some(g => g.name === channel) && (
-              <button onClick={() => setShowCode(!showCode)} className="chip bg-gold/10 text-gold-700 hover:bg-gold/20 transition shrink-0" title="Taklif kodi">
-                <KeyRound size={11} className="inline -mt-0.5 mr-1" />
-                {showCode ? (groups.find(g => g.name === channel)?.invite_code || '—') : 'Kodni ko\'rsatish'}
-              </button>
+            {tab === 'groups' && (isStaff || customGroupRoom?.created_by === user.full_name) && (groups.some(g => g.name === channel) || customGroupRoom) && (
+              showCode ? (
+                <button onClick={() => { navigator.clipboard?.writeText(currentInviteCode || ''); setShowCode(false); }}
+                  className="chip bg-gold/10 text-gold-700 hover:bg-gold/20 transition shrink-0" title="Nusxalash">
+                  <Copy size={11} className="inline -mt-0.5 mr-1" /> {currentInviteCode || '—'}
+                </button>
+              ) : (
+                <button onClick={() => setShowCode(true)} className="chip bg-gold/10 text-gold-700 hover:bg-gold/20 transition shrink-0" title="Taklif kodi">
+                  <KeyRound size={11} className="inline -mt-0.5 mr-1" /> Kodni ko'rsatish
+                </button>
+              )
             )}
+            <button onClick={() => setShowPremium(true)} className="chip bg-gradient-to-r from-amber-400/20 to-yellow-300/20 text-amber-700 hover:from-amber-400/30 hover:to-yellow-300/30 transition shrink-0" title="Chat Premium">
+              <Crown size={11} className="inline -mt-0.5 mr-1" /> Premium
+            </button>
             {pinnedInChannel.length > 0 && (
               <button onClick={() => setPinnedOpen(!pinnedOpen)} className="chip bg-navy-50 text-navy-600 hover:bg-navy-100 transition shrink-0" title="Qadalgan xabarlar">
                 <Pin size={11} className="inline -mt-0.5 mr-1" />
                 {pinnedInChannel.length} ta {pinnedOpen ? <ChevronUp size={11} className="inline -mt-0.5" /> : <ChevronDown size={11} className="inline -mt-0.5" />}
               </button>
+            )}
+            {callPeerName && (
+              <>
+                <button onClick={() => call.startCall('audio')} disabled={call.callState !== 'idle'} className="grid place-items-center w-8 h-8 rounded-lg hover:bg-navy-50 text-navy-400 transition disabled:opacity-30" title="Ovozli qo'ng'iroq">
+                  <Phone size={16} />
+                </button>
+                <button onClick={() => call.startCall('video')} disabled={call.callState !== 'idle'} className="grid place-items-center w-8 h-8 rounded-lg hover:bg-navy-50 text-navy-400 transition disabled:opacity-30" title="Video qo'ng'iroq">
+                  <VideoIcon size={16} />
+                </button>
+              </>
             )}
             <button onClick={() => setShowMembers(!showMembers)} className="grid place-items-center w-8 h-8 rounded-lg hover:bg-navy-50 text-navy-400 transition" title="A'zolar">
               <UserPlus size={16} />
@@ -561,7 +743,7 @@ export default function GroupChat() {
                 <div className="text-center text-navy-400 text-sm py-20">Hali xabar yo'q</div>
               ) : filtered.map((m, i) => {
                 const isMe = m.sender === user.full_name;
-                const isBot = m.sender === BOT_NAME;
+                const isBot = m.sender in botIconByName;
                 const mediaType = m.media_type;
                 const prev = filtered[i - 1];
                 const next = filtered[i + 1];
@@ -574,15 +756,20 @@ export default function GroupChat() {
                   <div key={m.id} className={`group flex gap-2 ${isMe ? 'flex-row-reverse' : ''} ${showHeader ? 'mt-3' : ''} animate-fade`}>
                     <div className="w-7 shrink-0">
                       {!sameAsNext && (
-                        <div className={`grid place-items-center w-7 h-7 rounded-full bg-gradient-to-br ${isBot ? 'from-violet-500 to-violet-700' : avatarColor(m.sender)} text-white text-[9px] font-bold`}>
-                          {isBot ? '🤖' : m.sender?.[0]?.toUpperCase()}
-                        </div>
+                        avatarUrlFor(m.sender) && !isBot ? (
+                          <img src={api.fileUrl(avatarUrlFor(m.sender))} alt={m.sender} className="w-7 h-7 rounded-full object-cover" />
+                        ) : (
+                          <div className={`grid place-items-center w-7 h-7 rounded-full bg-gradient-to-br ${isBot ? 'from-violet-500 to-violet-700' : avatarColor(m.sender)} text-white text-[9px] font-bold`}>
+                            {isBot ? (botIconByName[m.sender] || '🤖') : m.sender?.[0]?.toUpperCase()}
+                          </div>
+                        )
                       )}
                     </div>
                     <div className={`max-w-[70%] relative ${isMe ? 'text-right' : ''}`}>
                       {showHeader && (
                         <div className={`flex items-center gap-1.5 mb-0.5 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
                           <span className="text-[11px] font-semibold text-navy-600">{isMe ? 'Siz' : m.sender}</span>
+                          {isPremium(m.sender) && <Crown size={10} className="text-amber-500" title="Chat Premium" />}
                           <span className="text-[9px] text-navy-300">{timeAgo(m.timestamp)}</span>
                           {m.pinned && <Pin size={9} className="text-amber-500" />}
                         </div>
@@ -593,6 +780,9 @@ export default function GroupChat() {
                         <button onClick={() => setReplyingTo({ id: m.id, sender: m.sender, text: m.text || m.media_name || 'media' })} className="p-1 rounded-full hover:bg-navy-50 text-navy-400" title="Javob berish"><Reply size={12} /></button>
                         <button onClick={() => togglePin(m)} className={`p-1 rounded-full hover:bg-navy-50 ${m.pinned ? 'text-amber-500' : 'text-navy-400'}`} title={m.pinned ? 'Qadashni bekor qilish' : 'Qadash'}><Pin size={12} /></button>
                         <button onClick={() => setReactionPickerFor(reactionPickerFor === m.id ? null : m.id)} className="p-1 rounded-full hover:bg-navy-50 text-navy-400" title="Reaksiya"><SmilePlus size={12} /></button>
+                        {(isMe || isAdmin) && (
+                          <button onClick={() => deleteMessage(m)} className="p-1 rounded-full hover:bg-red-50 text-navy-400 hover:text-red-500" title="O'chirish"><Trash2 size={12} /></button>
+                        )}
                       </div>
                       {reactionPickerFor === m.id && (
                         <div className={`absolute top-6 ${isMe ? 'right-0' : 'left-0'} flex gap-0.5 bg-white shadow-md border border-navy-100 rounded-full px-1.5 py-1 z-20`}>
@@ -644,14 +834,24 @@ export default function GroupChat() {
                       )}
 
                       {groups.length > 0 && (
-                        <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
+                        <div className={`flex flex-wrap gap-1 mt-1 relative ${isMe ? 'justify-end' : ''}`}>
                           {groups.map(([emoji, senders]) => (
-                            <button key={emoji} onClick={() => toggleReaction(m, emoji)}
-                              className={`flex items-center gap-0.5 text-[11px] rounded-full px-1.5 py-0.5 border transition ${
-                                senders.includes(user.full_name) ? 'bg-gold/10 border-gold/40' : 'bg-navy-50 border-navy-100 hover:bg-navy-100'
-                              }`} title={senders.join(', ')}>
-                              <span>{emoji}</span><span className="text-navy-500 font-semibold">{senders.length}</span>
-                            </button>
+                            <div key={emoji} className="relative">
+                              <button onClick={() => toggleReaction(m, emoji)}
+                                onMouseEnter={() => setWhoReacted({ msgId: m.id, emoji })}
+                                onMouseLeave={() => setWhoReacted((w) => (w?.msgId === m.id && w?.emoji === emoji ? null : w))}
+                                className={`flex items-center gap-0.5 text-[11px] rounded-full px-1.5 py-0.5 border transition ${
+                                  senders.includes(user.full_name) ? 'bg-gold/10 border-gold/40' : 'bg-navy-50 border-navy-100 hover:bg-navy-100'
+                                }`}>
+                                <span>{emoji}</span><span className="text-navy-500 font-semibold">{senders.length}</span>
+                              </button>
+                              {whoReacted?.msgId === m.id && whoReacted?.emoji === emoji && (
+                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-30 bg-navy-800 text-white text-[11px] rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                                  {senders.join(', ')}
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-navy-800" />
+                                </div>
+                              )}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -661,7 +861,7 @@ export default function GroupChat() {
               })}
               {botTyping && isBotChannel && (
                 <div className="flex gap-2 mt-3 animate-fade">
-                  <div className="grid place-items-center w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 text-white text-[9px] font-bold shrink-0">🤖</div>
+                  <div className="grid place-items-center w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 text-white text-[9px] font-bold shrink-0">{activeBot?.icon || '🤖'}</div>
                   <div className="inline-block px-4 py-3 bg-[#E9E9EB]" style={{ borderRadius: 18, borderBottomLeftRadius: 4 }}>
                     <div className="flex gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-navy-400 animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -784,10 +984,27 @@ export default function GroupChat() {
             )}
 
             {showEmoji && !recorder && (
-              <div className="flex flex-wrap gap-1 mb-2 p-2 bg-navy-50 rounded-2xl">
-                {EMOJIS.map(e => (
-                  <button key={e} onClick={() => addEmoji(e)} className="text-xl hover:scale-125 transition">{e}</button>
-                ))}
+              <div className="mb-2 p-2 bg-navy-50 rounded-2xl">
+                <div className="flex flex-wrap gap-1">
+                  {allEmojis.map((e, i) => (
+                    <button key={e + i} onClick={() => addEmoji(e)} className="text-xl hover:scale-125 transition">{e}</button>
+                  ))}
+                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-navy-200/60">
+                    <input value={newEmojiInput} onChange={(e) => setNewEmojiInput(e.target.value)}
+                      placeholder="Yangi emoji qo'shish..." maxLength={8}
+                      className="input !py-1 text-xs flex-1" />
+                    <button onClick={async () => {
+                      const emoji = newEmojiInput.trim();
+                      if (!emoji) return;
+                      await api.post('/chat_custom_emojis', { emoji, added_by: user.full_name, date: new Date().toISOString().slice(0, 10) }).catch((e2) => alert(e2.message));
+                      setNewEmojiInput(''); await load();
+                    }} className="btn-gold !py-1 !px-2.5 text-[10px] shrink-0">
+                      <Plus size={12} className="inline -mt-0.5" /> Qo'shish
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -858,6 +1075,47 @@ export default function GroupChat() {
           )}
         </div>
       </div>
+
+      <Modal open={showPremium} title="Chat Premium" onClose={() => setShowPremium(false)}>
+        <div className="text-center">
+          <div className="grid place-items-center w-16 h-16 rounded-3xl bg-gradient-to-br from-amber-400/20 to-yellow-300/10 text-amber-500 mb-4 mx-auto shadow-sm">
+            <Crown size={30} />
+          </div>
+          <h3 className="font-display text-lg text-navy-800 mb-1">Telegram Premiumga o'xshash imkoniyatlar</h3>
+          <p className="text-sm text-navy-400 mb-5">Chatda alohida ajralib turing — tarifni tanlang.</p>
+          <ul className="text-left text-sm text-navy-600 space-y-1.5 mb-5 bg-navy-50/60 rounded-2xl p-3.5">
+            <li className="flex items-center gap-2"><Crown size={13} className="text-amber-500 shrink-0" /> Ism yonida oltin 👑 belgi — hamma ko'radi</li>
+            <li className="flex items-center gap-2"><Smile size={13} className="text-amber-500 shrink-0" /> Emoji reaksiyalarda alohida ajralib turish</li>
+            <li className="flex items-center gap-2"><Paperclip size={13} className="text-amber-500 shrink-0" /> Kattaroq fayl/media yuklash ustuvorligi</li>
+            <li className="flex items-center gap-2"><Bot size={13} className="text-amber-500 shrink-0" /> ISO Termizy AI bilan cheklovsiz muloqot</li>
+          </ul>
+          {!myStudentRole ? (
+            <p className="text-xs text-navy-400">Chat Premium faqat o'quvchi hisoblari uchun mavjud.</p>
+          ) : myPremiumActive ? (
+            <div className="text-sm font-bold text-emerald-600 bg-emerald-50 rounded-xl py-2.5">✅ Sizda Chat Premium faol</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                {PREMIUM_PLANS.map((plan) => (
+                  <button key={plan.key} onClick={() => buyPremium(plan.key)} disabled={!!buyingPremium}
+                    className={`relative rounded-2xl border p-3 text-left transition disabled:opacity-40 ${
+                      plan.popular ? 'border-gold bg-gold/5 hover:bg-gold/10' : 'border-navy-100 hover:border-gold/50 hover:bg-navy-50/60'
+                    }`}>
+                    {plan.popular && <span className="absolute -top-2 right-2 chip bg-gold text-white text-[8px] !px-1.5 !py-0.5">Mashhur</span>}
+                    <div className="text-sm font-bold text-navy-800">{plan.label}</div>
+                    <div className="text-xs text-gold-600 font-bold mt-0.5">{plan.coins} 🪙</div>
+                    {plan.save && <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">{plan.save}</div>}
+                    {buyingPremium === plan.key && <div className="text-[10px] text-navy-400 mt-1">Sotib olinmoqda...</div>}
+                  </button>
+                ))}
+              </div>
+              {premiumErr && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{premiumErr}</div>}
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {callPeerName && <CallOverlay call={call} peerName={callPeerName} />}
     </div>
   );
 }
