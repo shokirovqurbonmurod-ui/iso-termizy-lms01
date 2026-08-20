@@ -7,11 +7,13 @@ const r = express.Router();
 r.use(authRequired);
 
 const STATUS_TEXT = {
-  active: { emoji: '✅', label: "darsda faol qatnashdi" },
-  passive: { emoji: '🟡', label: "darsda qatnashdi (passiv)" },
-  inactive: { emoji: '🔴', label: "darsda faol bo'lmadi" },
-  absent: { emoji: '⚪', label: "darsga kelmadi" },
+  active: { emoji: '✅', label: "darsda faol qatnashdi", short: 'Faol qatnashdi' },
+  passive: { emoji: '🟡', label: "darsda qatnashdi (passiv)", short: 'Passiv qatnashdi' },
+  inactive: { emoji: '🔴', label: "darsda faol bo'lmadi", short: "Faol bo'lmadi" },
+  absent: { emoji: '⚪', label: "darsga kelmadi", short: 'Kelmadi' },
 };
+const STATUS_ORDER = ['active', 'passive', 'inactive', 'absent'];
+const MAX_NAMES_SHOWN = 8;
 
 // Bitta guruh, bitta sana uchun barcha o'quvchilarni bir so'rovda belgilaydi (qayta belgilansa eskisi almashadi).
 // Har bir o'quvchi holatiga qarab ota-onasiga shaxsiy xabar, guruhning Telegram topic'iga esa umumiy
@@ -21,7 +23,7 @@ r.post('/bulk', canMutate, (req, res) => {
   if (!group_name || !date || !Array.isArray(records)) {
     return res.status(400).json({ error: 'group_name, date va records kerak.' });
   }
-  const counts = {};
+  const byStatus = {};
   for (const rec of records) {
     if (!rec.student_id || !rec.status) continue;
     const existing = store.where('student_attendance_daily',
@@ -31,7 +33,7 @@ r.post('/bulk', canMutate, (req, res) => {
       student_id: rec.student_id, student_name: rec.student_name || '',
       group_name, date, status: rec.status,
     });
-    counts[rec.status] = (counts[rec.status] || 0) + 1;
+    (byStatus[rec.status] ||= []).push(rec.student_name || "Noma'lum");
     const st = STATUS_TEXT[rec.status];
     if (st) {
       notifyForStudent(rec.student_id, `${st.emoji} Farzandingiz ${rec.student_name || ''} — ${date} kuni "${group_name}" darsida ${st.label}.`).catch(() => {});
@@ -39,11 +41,19 @@ r.post('/bulk', canMutate, (req, res) => {
   }
   logAudit(req.user.name, 'mark student_attendance_daily', `${group_name} · ${date} · ${records.length} ta`);
 
-  const summaryLines = Object.entries(STATUS_TEXT)
-    .filter(([key]) => counts[key])
-    .map(([key, st]) => `${st.emoji} ${counts[key]} ta`);
-  if (summaryLines.length) {
-    notifyGroupTopic(group_name, `📋 Davomat belgilandi — "${group_name}" (${date})\n${summaryLines.join('\n')}`).catch(() => {});
+  const total = STATUS_ORDER.reduce((sum, key) => sum + (byStatus[key]?.length || 0), 0);
+  if (total) {
+    const present = (byStatus.active?.length || 0) + (byStatus.passive?.length || 0);
+    const percent = Math.round((present / total) * 100);
+    const sections = STATUS_ORDER.filter((key) => byStatus[key]?.length).map((key) => {
+      const st = STATUS_TEXT[key];
+      const names = byStatus[key];
+      const shown = names.slice(0, MAX_NAMES_SHOWN).join(', ');
+      const more = names.length > MAX_NAMES_SHOWN ? ` va yana ${names.length - MAX_NAMES_SHOWN} ta` : '';
+      return `${st.emoji} ${st.short} (${names.length}):\n${shown}${more}`;
+    });
+    const text = `📋 DAVOMAT — "${group_name}"\n📅 ${date}\n━━━━━━━━━━━━━━━\n\n${sections.join('\n\n')}\n\n📊 Qatnashish: ${percent}% (${present}/${total})`;
+    notifyGroupTopic(group_name, text).catch(() => {});
   }
 
   res.json({ ok: true, count: records.length });
