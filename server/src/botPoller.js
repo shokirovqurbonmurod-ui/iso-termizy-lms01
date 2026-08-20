@@ -63,12 +63,19 @@ export async function sendMessage(chatId, text, messageThreadId, replyMarkup) {
   } catch (e) { console.error('Bot sendMessage xatosi:', e.message); }
 }
 
-// Mini App tugmasi — bot sozlamalarida "mini_app_url" bo'lsa xabar tugmasi/chat menyu tugmasi sifatida ko'rsatiladi.
-// Telegram web_app tugmasi faqat shaxsiy (private) chatda ishlaydi, shuning uchun guruhda ishlatilmaydi.
-function miniAppKeyboard() {
+// Zamonaviy asosiy menyu — bosiladigan tugmalar, "mini_app_url" sozlangan bo'lsa Mini App tugmasi ham
+// qo'shiladi (web_app tugmasi faqat shaxsiy chatda ishlaydi, shuning uchun bu funksiya guruhda chaqirilmaydi). — buyruqlarni qo'lda yozish o'rniga bosiladigan tugmalar orqali.
+// callback_data shunchaki buyruq nomi (masalan "balance"), handleCallbackQuery shuni commandReply'ga uzatadi.
+function mainMenuKeyboard() {
+  const rows = [
+    [{ text: '🪙 Balans', callback_data: 'balance' }, { text: '📅 Jadval', callback_data: 'schedule' }],
+    [{ text: "💳 To'lovlar", callback_data: 'payments' }, { text: '👥 Guruh', callback_data: 'group' }],
+    [{ text: '📋 Davomat', callback_data: 'attendance' }, { text: '📚 Uy vazifa', callback_data: 'homework' }],
+    [{ text: 'ℹ️ Yordam', callback_data: 'help' }],
+  ];
   const url = getBotSettings()?.mini_app_url;
-  if (!url) return undefined;
-  return { inline_keyboard: [[{ text: '📱 Ilovani ochish', web_app: { url } }]] };
+  if (url) rows.push([{ text: '📱 Ilovani ochish', web_app: { url } }]);
+  return { inline_keyboard: rows };
 }
 
 // Bot menyusidagi doimiy (message-input yonidagi) tugmani mini-app'ga sozlaydi — sozlama saqlanganda chaqiriladi.
@@ -392,7 +399,7 @@ async function handleMessage(msg) {
   if (text.startsWith('/start')) {
     const code = text.split(/\s+/)[1];
     if (!code) {
-      return sendMessage(chatId, "Assalomu alaykum! 🏛 ISO Termizy Avlodlari botiga xush kelibsiz.\n\nHisobingizni ulash uchun tizimdagi \"Bot\" sahifasidan kod oling va bu yerga shunday yuboring:\n/start 123456", null, miniAppKeyboard());
+      return sendMessage(chatId, "Assalomu alaykum! 🏛 ISO Termizy Avlodlari botiga xush kelibsiz.\n\nHisobingizni ulash uchun tizimdagi \"Bot\" sahifasidan kod oling va bu yerga shunday yuboring:\n/start 123456", null, mainMenuKeyboard());
     }
     const pending = takePendingCode(code);
     if (!pending) return sendMessage(chatId, "❌ Kod noto'g'ri yoki muddati o'tgan (10 daqiqa). Tizimdan yangi kod oling.");
@@ -402,7 +409,7 @@ async function handleMessage(msg) {
     store.insert('telegram_links', {
       chat_id: chatId, user_id: pending.user_id, user_name: pending.user_name, role: pending.role, linked_at: now(),
     });
-    return sendMessage(chatId, `✅ Hisobingiz ulandi, ${pending.user_name}!\n\n${helpText()}`, null, miniAppKeyboard());
+    return sendMessage(chatId, `✅ Hisobingiz ulandi, ${pending.user_name}!\n\nQuyidagi tugmalardan birini bosing 👇`, null, mainMenuKeyboard());
   }
 
   const link = store.where('telegram_links', (l) => l.chat_id === chatId)[0];
@@ -412,9 +419,28 @@ async function handleMessage(msg) {
 
   const cmdName = text.replace(/^\//, '').split(/[\s@]/)[0].toLowerCase();
   const reply = commandReply(cmdName, link);
-  if (reply) return sendMessage(chatId, reply, null, cmdName === 'help' ? miniAppKeyboard() : undefined);
+  if (reply) return sendMessage(chatId, reply, null, cmdName === 'help' ? mainMenuKeyboard() : undefined);
 
-  return sendMessage(chatId, "Noma'lum buyruq. /help yozib mavjud buyruqlarni ko'ring.");
+  return sendMessage(chatId, "Noma'lum buyruq. Quyidagi menyudan tanlang yoki /help yozing.", null, mainMenuKeyboard());
+}
+
+// Doimiy menyu tugmalari (masalan "🪙 Balans") bosilganda keladigan callback_query'ni oddiy
+// buyruq kabi qayta ishlaydi — mantiq commandReply'da bitta joyda, matn va tugma bir xil javob beradi.
+async function handleCallbackQuery(cq) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (token) {
+    fetch(`${API()}/answerCallbackQuery`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: cq.id }),
+    }).catch(() => {});
+  }
+  const chatId = cq.message?.chat?.id;
+  if (!chatId) return;
+  const messageThreadId = cq.message?.message_thread_id;
+  const link = cq.from?.id ? store.where('telegram_links', (l) => Number(l.chat_id) === cq.from.id)[0] : null;
+  if (!link) return sendMessage(chatId, "Hisobingiz ulanmagan. Shaxsiy chatda /start yozib ulang.", messageThreadId);
+  const reply = commandReply(cq.data, link);
+  if (reply) return sendMessage(chatId, reply, messageThreadId, cq.data === 'help' ? mainMenuKeyboard() : undefined);
 }
 
 async function poll() {
@@ -427,6 +453,7 @@ async function poll() {
       for (const update of data.result) {
         offset = update.update_id + 1;
         if (update.message) await handleMessage(update.message);
+        else if (update.callback_query) await handleCallbackQuery(update.callback_query);
       }
     }
   } catch (e) { console.error('Bot poll xatosi:', e.message); }
