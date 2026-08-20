@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "ISO Termizy Avlodlari — LMS/CRM/ERP backend (Express + SQLite)",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
