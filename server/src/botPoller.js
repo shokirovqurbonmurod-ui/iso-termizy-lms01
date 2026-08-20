@@ -63,19 +63,43 @@ export async function sendMessage(chatId, text, messageThreadId, replyMarkup) {
   } catch (e) { console.error('Bot sendMessage xatosi:', e.message); }
 }
 
-// Zamonaviy asosiy menyu — bosiladigan tugmalar, "mini_app_url" sozlangan bo'lsa Mini App tugmasi ham
-// qo'shiladi (web_app tugmasi faqat shaxsiy chatda ishlaydi, shuning uchun bu funksiya guruhda chaqirilmaydi). — buyruqlarni qo'lda yozish o'rniga bosiladigan tugmalar orqali.
+// Zamonaviy asosiy menyu — bitta tekis ekranda bosiladigan tugmalar (bo'lim/submenu yo'q, foydalanuvchi
+// so'rovi bo'yicha). "mini_app_url" sozlangan bo'lsa Mini App tugmasi ham qo'shiladi (web_app tugmasi
+// faqat shaxsiy chatda ishlaydi, shuning uchun bu funksiya guruhda chaqirilmaydi).
 // callback_data shunchaki buyruq nomi (masalan "balance"), handleCallbackQuery shuni commandReply'ga uzatadi.
 function mainMenuKeyboard() {
   const rows = [
     [{ text: '🪙 Balans', callback_data: 'balance' }, { text: '📅 Jadval', callback_data: 'schedule' }],
     [{ text: "💳 To'lovlar", callback_data: 'payments' }, { text: '👥 Guruh', callback_data: 'group' }],
     [{ text: '📋 Davomat', callback_data: 'attendance' }, { text: '📚 Uy vazifa', callback_data: 'homework' }],
-    [{ text: 'ℹ️ Yordam', callback_data: 'help' }],
+    [{ text: '📝 Imtihonlar', callback_data: 'exams' }, { text: '🏆 Sertifikatlar', callback_data: 'certificates' }],
+    [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }],
   ];
   const url = getBotSettings()?.mini_app_url;
   if (url) rows.push([{ text: '📱 Ilovani ochish', web_app: { url } }]);
   return { inline_keyboard: rows };
+}
+
+// Buyruq muvaffaqiyatli bajarilganda foydalanuvchi xabariga qo'yiladigan reaksiya — Telegram faqat
+// belgilangan (standart) emoji to'plamini reaksiya sifatida qabul qiladi, shuning uchun ixtiyoriy
+// emoji (masalan 🪙, 📅) ishlatib bo'lmaydi, faqat shu ro'yxatdagilar.
+const REACTIONS = { ok: '👍', linked: '🎉', wrongCode: '😢', unknown: '🤔', answered: '🔥' };
+
+async function sendChatAction(chatId, action, messageThreadId) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  const body = { chat_id: chatId, action };
+  if (messageThreadId) body.message_thread_id = Number(messageThreadId);
+  fetch(`${API()}/sendChatAction`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+}
+
+async function reactTo(chatId, messageId, emoji) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !messageId || !emoji) return;
+  fetch(`${API()}/setMessageReaction`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId, reaction: [{ type: 'emoji', emoji }] }),
+  }).catch(() => {});
 }
 
 // Bot menyusidagi doimiy (message-input yonidagi) tugmani mini-app'ga sozlaydi — sozlama saqlanganda chaqiriladi.
@@ -135,6 +159,9 @@ const BUILTIN_COMMANDS = [
   { command: 'group', description: 'Guruhdoshlar ro\'yxati' },
   { command: 'attendance', description: "Davomat tarixi" },
   { command: 'homework', description: "Uy vazifalari va baholar" },
+  { command: 'exams', description: 'Imtihon natijalari' },
+  { command: 'certificates', description: 'Sertifikatlar' },
+  { command: 'announcements', description: "So'nggi e'lonlar" },
   { command: 'finance', description: "Qarzdorlar va oylik tushum (faqat moliya/rahbariyat)" },
   { command: 'help', description: 'Yordam' },
 ];
@@ -142,15 +169,18 @@ const BUILTIN_COMMANDS = [
 function helpText() {
   const custom = store.all('bot_commands');
   const lines = [
-    "Mavjud buyruqlar:",
-    "/balance — coin va ball balansi",
-    "/schedule — dars jadvali",
-    "/payments — to'lovlar tarixi",
-    "/group — guruhdoshlar ro'yxati",
-    "/attendance — davomat tarixi",
-    "/homework — uy vazifalari va baholar",
-    "/finance — qarzdorlar va oylik tushum (faqat moliya/rahbariyat xodimlari)",
-    "/help — shu yordam matni",
+    "📋 Mavjud buyruqlar:",
+    "🪙 /balance — coin va ball balansi",
+    "📅 /schedule — dars jadvali",
+    "💳 /payments — to'lovlar tarixi",
+    "👥 /group — guruhdoshlar ro'yxati",
+    "📋 /attendance — davomat tarixi",
+    "📚 /homework — uy vazifalari va baholar",
+    "📝 /exams — imtihon natijalari",
+    "🏆 /certificates — sertifikatlar",
+    "📢 /announcements — so'nggi e'lonlar",
+    "📊 /finance — qarzdorlar va oylik tushum (faqat moliya/rahbariyat xodimlari)",
+    "ℹ️ /help — shu yordam matni",
   ];
   for (const c of custom) lines.push(`/${c.command} — ${c.description || ''}`.trimEnd());
   return lines.join('\n');
@@ -229,6 +259,26 @@ function commandReply(cmdName, link) {
     if (!reviews.length) return "Baholangan uy vazifalari hali topilmadi.";
     const lines = reviews.map((h) => `📝 ${h.homework || '—'} — ${h.date || ''}\n⭐ Baho: ${h.score ?? '—'}${h.feedback ? `\n💬 ${h.feedback}` : ''}`);
     return `📚 So'nggi uy vazifalari:\n\n${lines.join('\n\n')}`;
+  }
+  if (cmdName === 'exams') {
+    const results = store.all('exam_results').filter((e) => e.student === link.user_name)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5);
+    if (!results.length) return "Imtihon natijalari topilmadi.";
+    const lines = results.map((e) => `📝 ${e.exam || '—'} — ${e.date || ''}\n⭐ Ball: ${e.score ?? '—'}${e.grade ? ` (${e.grade})` : ''}`);
+    return `🎓 So'nggi imtihon natijalari:\n\n${lines.join('\n\n')}`;
+  }
+  if (cmdName === 'certificates') {
+    const certs = store.all('certificates').filter((c) => c.student === link.user_name)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (!certs.length) return "Hali sertifikat yo'q.";
+    const lines = certs.map((c) => `🏆 ${c.course || '—'} (${c.level || '—'}) — ${c.date || ''}\n№ ${c.serial || '—'}`);
+    return `🏆 Sertifikatlaringiz:\n\n${lines.join('\n\n')}`;
+  }
+  if (cmdName === 'announcements') {
+    const items = store.all('announcements').sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5);
+    if (!items.length) return "Hozircha e'lonlar yo'q.";
+    const lines = items.map((a) => `📢 ${a.title || '—'} — ${a.date || ''}\n${a.body || ''}`);
+    return `📢 So'nggi e'lonlar:\n\n${lines.join('\n\n')}`;
   }
   if (cmdName === 'help') return helpText();
   if (cmdName === 'finance') return financeReport(link);
@@ -347,6 +397,7 @@ async function handleGroupMessage(msg) {
       }
       const reply = commandReply(cmdName, link);
       if (reply) {
+        reactTo(chatId, msg.message_id, REACTIONS.ok);
         // Nozik (masalan moliyaviy) ma'lumot guruhga emas — so'rovchining shaxsiy chatiga yuboriladi,
         // guruhdagi boshqa a'zolar (masalan ota-onalar) boshqalarning qarzini ko'rmasin.
         if (SENSITIVE_COMMANDS.includes(cmdName)) {
@@ -376,9 +427,11 @@ async function handleGroupMessage(msg) {
   if (settings?.qa_enabled && (isQaChat || allowAnywhereFallback)) {
     const question = mentioned ? text.replace(new RegExp('@' + botUsername, 'ig'), '').trim() : text;
     if (question) {
+      sendChatAction(chatId, 'typing', msg.message_thread_id);
       const answer = await askAI(question);
       if (answer) {
         await sendMessage(chatId, answer, msg.message_thread_id);
+        reactTo(chatId, msg.message_id, REACTIONS.answered);
         store.insert('ai_chat_log', {
           user: msg.from?.first_name || "Guruh a'zosi", role: 'telegram_group', session: `group_${chatId}`,
           message: question, reply: answer, model: store.all('ai_settings')[0]?.model || 'auto',
@@ -399,17 +452,21 @@ async function handleMessage(msg) {
   if (text.startsWith('/start')) {
     const code = text.split(/\s+/)[1];
     if (!code) {
-      return sendMessage(chatId, "Assalomu alaykum! 🏛 ISO Termizy Avlodlari botiga xush kelibsiz.\n\nHisobingizni ulash uchun tizimdagi \"Bot\" sahifasidan kod oling va bu yerga shunday yuboring:\n/start 123456", null, mainMenuKeyboard());
+      return sendMessage(chatId, "🏛 ISO TERMIZY AVLODLARI\n━━━━━━━━━━━━━━━━━━\n\nAssalomu alaykum va botimizga xush kelibsiz! 🎉\n\nHisobingizni ulash uchun tizimdagi \"Bot\" sahifasidan 6 xonali kod oling, so'ng shu yerga shunday yuboring:\n\n👉 /start 123456\n\nUlangach — coin balansi, dars jadvali, to'lovlar, davomat, imtihon natijalari va boshqa ko'p narsani shu yerdan bir zumda ko'rasiz. 🚀", null, mainMenuKeyboard());
     }
     const pending = takePendingCode(code);
-    if (!pending) return sendMessage(chatId, "❌ Kod noto'g'ri yoki muddati o'tgan (10 daqiqa). Tizimdan yangi kod oling.");
+    if (!pending) {
+      reactTo(chatId, msg.message_id, REACTIONS.wrongCode);
+      return sendMessage(chatId, "❌ Kod noto'g'ri yoki muddati o'tgan (10 daqiqa). Tizimdan yangi kod oling.");
+    }
 
     const existing = store.where('telegram_links', (l) => l.user_id === pending.user_id)[0];
     if (existing) store.remove('telegram_links', existing.id);
     store.insert('telegram_links', {
       chat_id: chatId, user_id: pending.user_id, user_name: pending.user_name, role: pending.role, linked_at: now(),
     });
-    return sendMessage(chatId, `✅ Hisobingiz ulandi, ${pending.user_name}!\n\nQuyidagi tugmalardan birini bosing 👇`, null, mainMenuKeyboard());
+    reactTo(chatId, msg.message_id, REACTIONS.linked);
+    return sendMessage(chatId, `✅ Hisobingiz muvaffaqiyatli ulandi, ${pending.user_name}! 🎉\n\nEndi quyidagi tugmalardan foydalanib kerakli ma'lumotni bir bosishda oling 👇`, null, mainMenuKeyboard());
   }
 
   const link = store.where('telegram_links', (l) => l.chat_id === chatId)[0];
@@ -417,10 +474,15 @@ async function handleMessage(msg) {
     return sendMessage(chatId, "Hisobingiz hali ulanmagan. Tizimdagi \"Bot\" sahifasidan kod olib, /start 123456 shaklida yuboring.");
   }
 
+  sendChatAction(chatId, 'typing');
   const cmdName = text.replace(/^\//, '').split(/[\s@]/)[0].toLowerCase();
   const reply = commandReply(cmdName, link);
-  if (reply) return sendMessage(chatId, reply, null, cmdName === 'help' ? mainMenuKeyboard() : undefined);
+  if (reply) {
+    reactTo(chatId, msg.message_id, REACTIONS.ok);
+    return sendMessage(chatId, reply, null, cmdName === 'help' ? mainMenuKeyboard() : undefined);
+  }
 
+  reactTo(chatId, msg.message_id, REACTIONS.unknown);
   return sendMessage(chatId, "Noma'lum buyruq. Quyidagi menyudan tanlang yoki /help yozing.", null, mainMenuKeyboard());
 }
 
