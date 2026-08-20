@@ -63,19 +63,70 @@ export async function sendMessage(chatId, text, messageThreadId, replyMarkup) {
   } catch (e) { console.error('Bot sendMessage xatosi:', e.message); }
 }
 
-// Zamonaviy asosiy menyu — bosiladigan tugmalar, "mini_app_url" sozlangan bo'lsa Mini App tugmasi ham
-// qo'shiladi (web_app tugmasi faqat shaxsiy chatda ishlaydi, shuning uchun bu funksiya guruhda chaqirilmaydi). — buyruqlarni qo'lda yozish o'rniga bosiladigan tugmalar orqali.
-// callback_data shunchaki buyruq nomi (masalan "balance"), handleCallbackQuery shuni commandReply'ga uzatadi.
-function mainMenuKeyboard() {
-  const rows = [
-    [{ text: '🪙 Balans', callback_data: 'balance' }, { text: '📅 Jadval', callback_data: 'schedule' }],
-    [{ text: "💳 To'lovlar", callback_data: 'payments' }, { text: '👥 Guruh', callback_data: 'group' }],
-    [{ text: '📋 Davomat', callback_data: 'attendance' }, { text: '📚 Uy vazifa', callback_data: 'homework' }],
-    [{ text: 'ℹ️ Yordam', callback_data: 'help' }],
-  ];
+// Buyruqlar bo'limlarga guruhlangan — menyu ikki bosqichli: avval bo'lim, keyin o'sha bo'lim
+// ichidagi buyruqlar tugma sifatida chiqadi (bitta tekis 10+ tugmali ro'yxat o'rniga).
+const COMMAND_META = {
+  balance: { emoji: '🪙', label: 'Balans' },
+  schedule: { emoji: '📅', label: 'Jadval' },
+  payments: { emoji: '💳', label: "To'lovlar" },
+  group: { emoji: '👥', label: 'Guruh' },
+  attendance: { emoji: '📋', label: 'Davomat' },
+  homework: { emoji: '📚', label: 'Uy vazifa' },
+  exams: { emoji: '📝', label: 'Imtihonlar' },
+  certificates: { emoji: '🏆', label: 'Sertifikatlar' },
+  announcements: { emoji: '📢', label: "E'lonlar" },
+  finance: { emoji: '📊', label: 'Moliya hisobot' },
+  help: { emoji: 'ℹ️', label: 'Yordam' },
+};
+const CATEGORIES = [
+  { key: 'edu', title: "🎓 Ta'lim", commands: ['schedule', 'attendance', 'homework', 'exams', 'certificates'] },
+  { key: 'fin', title: '💰 Moliya', commands: ['balance', 'payments'] },
+  { key: 'info', title: "ℹ️ Ma'lumot", commands: ['group', 'announcements', 'help'] },
+];
+const ADMIN_CATEGORY = { key: 'admin', title: '📊 Boshqaruv', commands: ['finance'] };
+const ALL_CATEGORIES = [...CATEGORIES, ADMIN_CATEGORY];
+
+function findCategory(key) { return ALL_CATEGORIES.find((c) => c.key === key); }
+function categoryKeyOf(cmdName) { return ALL_CATEGORIES.find((c) => c.commands.includes(cmdName))?.key; }
+// Moliya/rahbariyat xodimlariga qo'shimcha "📊 Boshqaruv" bo'limi ko'rsatiladi — boshqalarga esa
+// /finance buyrug'i umuman ko'rinmaydi (chalkash bo'lmasin).
+function categoriesFor(role) {
+  return role && FINANCE_ROLES.includes(role) ? ALL_CATEGORIES : CATEGORIES;
+}
+
+function pairRows(items, toButton) {
+  const rows = [];
+  for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2).map(toButton));
+  return rows;
+}
+
+// Asosiy menyu — bo'limlar (Ta'lim / Moliya / Ma'lumot [/ Boshqaruv]) tugma sifatida.
+// "mini_app_url" sozlangan bo'lsa Mini App tugmasi ham qo'shiladi (web_app tugmasi faqat
+// shaxsiy chatda ishlaydi, shuning uchun bu funksiya guruhda chaqirilmaydi).
+function mainMenuKeyboard(role) {
+  const rows = pairRows(categoriesFor(role), (c) => ({ text: c.title, callback_data: `cat:${c.key}` }));
   const url = getBotSettings()?.mini_app_url;
   if (url) rows.push([{ text: '📱 Ilovani ochish', web_app: { url } }]);
   return { inline_keyboard: rows };
+}
+
+// Bitta bo'lim ichidagi buyruqlar + "Orqaga" tugmasi.
+function categoryKeyboard(catKey) {
+  const cat = findCategory(catKey);
+  if (!cat) return mainMenuKeyboard();
+  const rows = pairRows(cat.commands, (cmd) => {
+    const meta = COMMAND_META[cmd] || { emoji: '•', label: cmd };
+    return { text: `${meta.emoji} ${meta.label}`, callback_data: `cmd:${cmd}` };
+  });
+  rows.push([{ text: '⬅️ Orqaga', callback_data: 'menu' }]);
+  return { inline_keyboard: rows };
+}
+
+// Bitta buyruq natijasi ostidagi "Menyuga qaytish" tugmasi — o'sha buyruq qaysi bo'limga tegishli
+// bo'lsa, o'sha bo'limga qaytaradi (har safar bosh menyuga tashlab yubormaydi).
+function backToMenuKeyboard(cmdName) {
+  const catKey = categoryKeyOf(cmdName);
+  return { inline_keyboard: [[{ text: '⬅️ Menyu', callback_data: catKey ? `cat:${catKey}` : 'menu' }]] };
 }
 
 // Bot menyusidagi doimiy (message-input yonidagi) tugmani mini-app'ga sozlaydi — sozlama saqlanganda chaqiriladi.
@@ -135,6 +186,9 @@ const BUILTIN_COMMANDS = [
   { command: 'group', description: 'Guruhdoshlar ro\'yxati' },
   { command: 'attendance', description: "Davomat tarixi" },
   { command: 'homework', description: "Uy vazifalari va baholar" },
+  { command: 'exams', description: 'Imtihon natijalari' },
+  { command: 'certificates', description: 'Sertifikatlar' },
+  { command: 'announcements', description: "So'nggi e'lonlar" },
   { command: 'finance', description: "Qarzdorlar va oylik tushum (faqat moliya/rahbariyat)" },
   { command: 'help', description: 'Yordam' },
 ];
@@ -142,17 +196,31 @@ const BUILTIN_COMMANDS = [
 function helpText() {
   const custom = store.all('bot_commands');
   const lines = [
-    "Mavjud buyruqlar:",
-    "/balance — coin va ball balansi",
+    "Mavjud buyruqlar (yoki pastdagi menyu tugmalaridan foydalaning):",
+    '',
+    "🎓 Ta'lim:",
     "/schedule — dars jadvali",
-    "/payments — to'lovlar tarixi",
-    "/group — guruhdoshlar ro'yxati",
     "/attendance — davomat tarixi",
     "/homework — uy vazifalari va baholar",
-    "/finance — qarzdorlar va oylik tushum (faqat moliya/rahbariyat xodimlari)",
+    "/exams — imtihon natijalari",
+    "/certificates — sertifikatlar",
+    '',
+    "💰 Moliya:",
+    "/balance — coin va ball balansi",
+    "/payments — to'lovlar tarixi",
+    '',
+    "ℹ️ Ma'lumot:",
+    "/group — guruhdoshlar ro'yxati",
+    "/announcements — so'nggi e'lonlar",
     "/help — shu yordam matni",
+    '',
+    "📊 Boshqaruv (faqat moliya/rahbariyat xodimlari):",
+    "/finance — qarzdorlar va oylik tushum",
   ];
-  for (const c of custom) lines.push(`/${c.command} — ${c.description || ''}`.trimEnd());
+  if (custom.length) {
+    lines.push('', "🔧 Qo'shimcha:");
+    for (const c of custom) lines.push(`/${c.command} — ${c.description || ''}`.trimEnd());
+  }
   return lines.join('\n');
 }
 
@@ -229,6 +297,26 @@ function commandReply(cmdName, link) {
     if (!reviews.length) return "Baholangan uy vazifalari hali topilmadi.";
     const lines = reviews.map((h) => `📝 ${h.homework || '—'} — ${h.date || ''}\n⭐ Baho: ${h.score ?? '—'}${h.feedback ? `\n💬 ${h.feedback}` : ''}`);
     return `📚 So'nggi uy vazifalari:\n\n${lines.join('\n\n')}`;
+  }
+  if (cmdName === 'exams') {
+    const results = store.all('exam_results').filter((e) => e.student === link.user_name)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5);
+    if (!results.length) return "Imtihon natijalari topilmadi.";
+    const lines = results.map((e) => `📝 ${e.exam || '—'} — ${e.date || ''}\n⭐ Ball: ${e.score ?? '—'}${e.grade ? ` (${e.grade})` : ''}`);
+    return `🎓 So'nggi imtihon natijalari:\n\n${lines.join('\n\n')}`;
+  }
+  if (cmdName === 'certificates') {
+    const certs = store.all('certificates').filter((c) => c.student === link.user_name)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (!certs.length) return "Hali sertifikat yo'q.";
+    const lines = certs.map((c) => `🏆 ${c.course || '—'} (${c.level || '—'}) — ${c.date || ''}\n№ ${c.serial || '—'}`);
+    return `🏆 Sertifikatlaringiz:\n\n${lines.join('\n\n')}`;
+  }
+  if (cmdName === 'announcements') {
+    const items = store.all('announcements').sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5);
+    if (!items.length) return "Hozircha e'lonlar yo'q.";
+    const lines = items.map((a) => `📢 ${a.title || '—'} — ${a.date || ''}\n${a.body || ''}`);
+    return `📢 So'nggi e'lonlar:\n\n${lines.join('\n\n')}`;
   }
   if (cmdName === 'help') return helpText();
   if (cmdName === 'finance') return financeReport(link);
@@ -409,7 +497,7 @@ async function handleMessage(msg) {
     store.insert('telegram_links', {
       chat_id: chatId, user_id: pending.user_id, user_name: pending.user_name, role: pending.role, linked_at: now(),
     });
-    return sendMessage(chatId, `✅ Hisobingiz ulandi, ${pending.user_name}!\n\nQuyidagi tugmalardan birini bosing 👇`, null, mainMenuKeyboard());
+    return sendMessage(chatId, `✅ Hisobingiz ulandi, ${pending.user_name}!\n\nQuyidagi bo'limlardan birini tanlang 👇`, null, mainMenuKeyboard(pending.role));
   }
 
   const link = store.where('telegram_links', (l) => l.chat_id === chatId)[0];
@@ -419,13 +507,14 @@ async function handleMessage(msg) {
 
   const cmdName = text.replace(/^\//, '').split(/[\s@]/)[0].toLowerCase();
   const reply = commandReply(cmdName, link);
-  if (reply) return sendMessage(chatId, reply, null, cmdName === 'help' ? mainMenuKeyboard() : undefined);
+  if (reply) return sendMessage(chatId, reply, null, cmdName === 'help' ? mainMenuKeyboard(link.role) : undefined);
 
-  return sendMessage(chatId, "Noma'lum buyruq. Quyidagi menyudan tanlang yoki /help yozing.", null, mainMenuKeyboard());
+  return sendMessage(chatId, "Noma'lum buyruq. Quyidagi menyudan tanlang yoki /help yozing.", null, mainMenuKeyboard(link.role));
 }
 
-// Doimiy menyu tugmalari (masalan "🪙 Balans") bosilganda keladigan callback_query'ni oddiy
-// buyruq kabi qayta ishlaydi — mantiq commandReply'da bitta joyda, matn va tugma bir xil javob beradi.
+// Menyu tugmalari bosilganda keladigan callback_query'ni qayta ishlaydi — uch xil callback_data bor:
+// "menu" (bosh menyu), "cat:<key>" (bo'lim ichi) va "cmd:<name>" (buyruq natijasi). Eski (yangilanishdan
+// oldingi) xabarlardagi tugmalar callback_data sifatida faqat buyruq nomini yuborgan — shu ham qo'llab-quvvatlanadi.
 async function handleCallbackQuery(cq) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (token) {
@@ -437,10 +526,22 @@ async function handleCallbackQuery(cq) {
   const chatId = cq.message?.chat?.id;
   if (!chatId) return;
   const messageThreadId = cq.message?.message_thread_id;
+  const data = cq.data || '';
   const link = cq.from?.id ? store.where('telegram_links', (l) => Number(l.chat_id) === cq.from.id)[0] : null;
+
+  if (data === 'menu') {
+    return sendMessage(chatId, "📋 Asosiy menyu — bo'limni tanlang:", messageThreadId, mainMenuKeyboard(link?.role));
+  }
+  if (data.startsWith('cat:')) {
+    const catKey = data.slice(4);
+    const cat = findCategory(catKey);
+    return sendMessage(chatId, `${cat?.title || 'Menyu'} — kerakli bo'limni tanlang:`, messageThreadId, categoryKeyboard(catKey));
+  }
+
   if (!link) return sendMessage(chatId, "Hisobingiz ulanmagan. Shaxsiy chatda /start yozib ulang.", messageThreadId);
-  const reply = commandReply(cq.data, link);
-  if (reply) return sendMessage(chatId, reply, messageThreadId, cq.data === 'help' ? mainMenuKeyboard() : undefined);
+  const cmdName = data.startsWith('cmd:') ? data.slice(4) : data;
+  const reply = commandReply(cmdName, link);
+  if (reply) return sendMessage(chatId, reply, messageThreadId, backToMenuKeyboard(cmdName));
 }
 
 async function poll() {
