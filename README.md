@@ -37,7 +37,7 @@ npm run dev
 
 ---
 
-## 🔑 Demo akkauntlar (parol: `123456`)
+## 🔑 Demo akkauntlar (parol: `12345`)
 
 | Telefon | Rol | Ism |
 |---|---|---|
