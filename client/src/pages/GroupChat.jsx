@@ -196,6 +196,16 @@ export default function GroupChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
+  // Kiruvchi qo'ng'iroq bannerida "Ochish" bosilganda (?dm=Ism) shu shaxsiy suhbatga o'tkazadi.
+  useEffect(() => {
+    const dm = searchParams.get('dm');
+    if (!dm) return;
+    setSearchParams({}, { replace: true });
+    setTab('private');
+    setChannel(`DM:${[user.full_name, dm].sort().join(':')}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const visibleChannels = useMemo(() =>
     DEF_CHANNELS.filter(c => !c.staffOnly || isStaff), [isStaff]);
 

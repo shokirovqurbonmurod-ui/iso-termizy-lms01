@@ -8,11 +8,15 @@ import { authRequired } from '../auth.js';
 const r = express.Router();
 r.use(authRequired);
 
-// ?channel=&after= — shu DM kanalidagi, berilgan id'dan keyingi signallar.
+// ?channel=&after= — shu DM kanalidagi, berilgan id'dan keyingi signallar (GroupChat ichidagi
+// faol qo'ng'iroq uchun). ?to=&after= (channel'siz) — foydalanuvchiga butun tizim bo'yicha
+// yo'naltirilgan signallar — hali ochilmagan sahifada ham kiruvchi qo'ng'iroqni bildirish uchun.
 r.get('/', (req, res) => {
-  const { channel, after } = req.query;
+  const { channel, to, after } = req.query;
   let rows = store.all('call_signals');
   if (channel) rows = rows.filter((s) => s.channel === channel);
+  else if (to) rows = rows.filter((s) => s.to === to);
+  else return res.status(400).json({ error: 'channel yoki to kerak' });
   if (after) rows = rows.filter((s) => Number(s.id) > Number(after));
   res.json(rows);
 });

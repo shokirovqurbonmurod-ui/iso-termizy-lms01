@@ -4,6 +4,7 @@ import { Menu, Sun, Moon, Languages } from 'lucide-react';
 import Sidebar from './Sidebar.jsx';
 import BottomTabBar from './BottomTabBar.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import IncomingCallBanner from './IncomingCallBanner.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useLang, LANGS } from '../i18n/LangContext.jsx';
@@ -81,6 +82,7 @@ export default function Layout() {
       </div>
 
       <BottomTabBar onOpenMenu={() => setDrawer(true)} />
+      <IncomingCallBanner />
     </div>
   );
 }
