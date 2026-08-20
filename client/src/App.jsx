@@ -1,0 +1,389 @@
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { useAuth } from './auth/AuthContext.jsx';
+import { findItem, canAccess } from './config/menu.js';
+import { Spinner } from './components/ui.jsx';
+
+import Layout from './components/Layout.jsx';
+import TabbedPage from './components/TabbedPage.jsx';
+import Login from './pages/Login.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import ResourcePage from './pages/ResourcePage.jsx';
+import Staff from './pages/Staff.jsx';
+import Leaderboard from './pages/Leaderboard.jsx';
+import Reports from './pages/Reports.jsx';
+import Audit from './pages/Audit.jsx';
+import AiAudit from './pages/AiAudit.jsx';
+import RolesPermissions from './pages/RolesPermissions.jsx';
+import Settings from './pages/Settings.jsx';
+import CoinGive from './pages/CoinGive.jsx';
+import CoinShop from './pages/CoinShop.jsx';
+import Passwords from './pages/Passwords.jsx';
+import AiAssistant from './pages/AiAssistant.jsx';
+import CoinExchange from './pages/CoinExchange.jsx';
+import MiniGames from './pages/MiniGames.jsx';
+import SurveyVote from './pages/SurveyVote.jsx';
+import GroupChat from './pages/GroupChat.jsx';
+import CoinDashboard from './pages/CoinDashboard.jsx';
+import CoinHistory from './pages/CoinHistory.jsx';
+import PointGive from './pages/PointGive.jsx';
+import { TeacherGrid, AiAnalytics } from './pages/Analytics.jsx';
+import AttendanceMark from './pages/AttendanceMark.jsx';
+import Schedule from './pages/Schedule.jsx';
+import CalendarPage from './pages/CalendarPage.jsx';
+import { BranchesMap, Levels } from './pages/SpecialPages.jsx';
+import Placeholder from './pages/Placeholder.jsx';
+import Groups from './pages/Groups.jsx';
+import MarketingCrm from './pages/MarketingCrm.jsx';
+import AttendanceAnalytics from './pages/AttendanceAnalytics.jsx';
+import Buxgalteriya from './pages/Buxgalteriya.jsx';
+import Konversiya from './pages/Konversiya.jsx';
+import Reception from './pages/Reception.jsx';
+import DemoLessons from './pages/DemoLessons.jsx';
+import WaitingList from './pages/WaitingList.jsx';
+import Referrals from './pages/Referrals.jsx';
+import Feedback from './pages/Feedback.jsx';
+import FaceCheckin from './pages/FaceCheckin.jsx';
+import Branches from './pages/Branches.jsx';
+import Tickets from './pages/Tickets.jsx';
+import LeaveManagement from './pages/LeaveManagement.jsx';
+import Evaluations from './pages/Evaluations.jsx';
+import BotPage from './pages/BotPage.jsx';
+import StudentProfile from './pages/StudentProfile.jsx';
+import ParentDashboard from './pages/ParentDashboard.jsx';
+import TeacherCoins from './pages/TeacherCoins.jsx';
+import CoinBankPage from './pages/CoinBankPage.jsx';
+import CoinGiftPage from './pages/CoinGiftPage.jsx';
+import LessonRatings from './pages/LessonRatings.jsx';
+import WorkHoursTracker from './pages/WorkHoursTracker.jsx';
+import ScheduleSwap from './pages/ScheduleSwap.jsx';
+import StaffRequests from './pages/StaffRequests.jsx';
+import EmployeeOfMonth from './pages/EmployeeOfMonth.jsx';
+import AttendanceOverall from './pages/AttendanceOverall.jsx';
+import GradeBook from './pages/GradeBook.jsx';
+import ReportCards from './pages/ReportCards.jsx';
+import StudentBehavior from './pages/StudentBehavior.jsx';
+import Tasks from './pages/Tasks.jsx';
+import LiveClassroom from './pages/LiveClassroom.jsx';
+import Meetings from './pages/Meetings.jsx';
+import TeacherPortfolio from './pages/TeacherPortfolio.jsx';
+import LessonPlans from './pages/LessonPlans.jsx';
+import GroupAnalytics from './pages/GroupAnalytics.jsx';
+import TeacherKpi from './pages/TeacherKpi.jsx';
+import LessonLibrary from './pages/LessonLibrary.jsx';
+import RoomBooking from './pages/RoomBooking.jsx';
+import DailyJournal from './pages/DailyJournal.jsx';
+import HomeworkPage from './pages/HomeworkPage.jsx';
+import PlacementTest from './pages/PlacementTest.jsx';
+import CoursesPage from './pages/CoursesPage.jsx';
+import ExamsPage from './pages/ExamsPage.jsx';
+import CertificatesPage from './pages/CertificatesPage.jsx';
+import LibraryPage from './pages/LibraryPage.jsx';
+import CurriculumPage from './pages/CurriculumPage.jsx';
+import LessonsPage from './pages/LessonsPage.jsx';
+import QuizzesPage from './pages/QuizzesPage.jsx';
+import VideoLessonsPage from './pages/VideoLessonsPage.jsx';
+import AssignmentsPage from './pages/AssignmentsPage.jsx';
+import DailyBonusPage from './pages/DailyBonusPage.jsx';
+import BirthdayBonusPage from './pages/BirthdayBonusPage.jsx';
+import AvatarShopPage from './pages/AvatarShopPage.jsx';
+import HomeworkReviewPage from './pages/HomeworkReviewPage.jsx';
+import MockExamsPage from './pages/MockExamsPage.jsx';
+import EssaysPage from './pages/EssaysPage.jsx';
+import EnrollmentPage from './pages/EnrollmentPage.jsx';
+import GroupChangePage from './pages/GroupChangePage.jsx';
+import FrozenStudentsPage from './pages/FrozenStudentsPage.jsx';
+import AlumniPage from './pages/AlumniPage.jsx';
+import StudentTimelinePage from './pages/StudentTimelinePage.jsx';
+import ActiveStudentsPage from './pages/ActiveStudentsPage.jsx';
+import DebtorsPage from './pages/DebtorsPage.jsx';
+import ExpensesPage from './pages/ExpensesPage.jsx';
+import SalariesPage from './pages/SalariesPage.jsx';
+import StaffPaymentPage from './pages/StaffPaymentPage.jsx';
+import CashboxPage from './pages/CashboxPage.jsx';
+import BankAccountsPage from './pages/BankAccountsPage.jsx';
+import InvoicesPage from './pages/InvoicesPage.jsx';
+import DiscountsPage from './pages/DiscountsPage.jsx';
+import SalesPipelinePage from './pages/SalesPipelinePage.jsx';
+import LeadsPage from './pages/LeadsPage.jsx';
+import FollowUpsPage from './pages/FollowUpsPage.jsx';
+import CampaignsPage from './pages/CampaignsPage.jsx';
+import RoomsPage from './pages/RoomsPage.jsx';
+import InventoryPage from './pages/InventoryPage.jsx';
+import DocumentsPage from './pages/DocumentsPage.jsx';
+import ContractsPage from './pages/ContractsPage.jsx';
+import PositionsPage from './pages/PositionsPage.jsx';
+import RulesPage from './pages/RulesPage.jsx';
+import PartnerCompaniesPage from './pages/PartnerCompaniesPage.jsx';
+import MessagesPage from './pages/MessagesPage.jsx';
+import OlympiadPage from './pages/OlympiadPage.jsx';
+import DebateClubPage from './pages/DebateClubPage.jsx';
+import SpeakingClubPage from './pages/SpeakingClubPage.jsx';
+import SuccessStoriesPage from './pages/SuccessStoriesPage.jsx';
+import ComplaintsPage from './pages/ComplaintsPage.jsx';
+import NotificationsAdminPage from './pages/NotificationsAdminPage.jsx';
+import ParentsPage from './pages/ParentsPage.jsx';
+import MissionsPage from './pages/MissionsPage.jsx';
+import BadgesAdminPage from './pages/BadgesAdminPage.jsx';
+import PromoCodesPage from './pages/PromoCodesPage.jsx';
+import StreakRewardsPage from './pages/StreakRewardsPage.jsx';
+import LuckyWheelLogPage from './pages/LuckyWheelLogPage.jsx';
+import LuckyWheel from './pages/LuckyWheel.jsx';
+import MysteryBoxPage from './pages/MysteryBoxPage.jsx';
+import VipStatusPage from './pages/VipStatusPage.jsx';
+import DailyPuzzlePage from './pages/DailyPuzzlePage.jsx';
+import VotingPage from './pages/VotingPage.jsx';
+import BossFightPage from './pages/BossFightPage.jsx';
+import StaffDirectoryPage from './pages/StaffDirectoryPage.jsx';
+import WorkTenurePage from './pages/WorkTenurePage.jsx';
+import OkrGoalsPage from './pages/OkrGoalsPage.jsx';
+import HiringPipelinePage from './pages/HiringPipelinePage.jsx';
+import SalaryCalculatorPage from './pages/SalaryCalculatorPage.jsx';
+import TurnoverLogPage from './pages/TurnoverLogPage.jsx';
+import TrainingTrackerPage from './pages/TrainingTrackerPage.jsx';
+import InternalJobsPage from './pages/InternalJobsPage.jsx';
+import MentorshipPage from './pages/MentorshipPage.jsx';
+import ExitInterviewsPage from './pages/ExitInterviewsPage.jsx';
+import InsurancePage from './pages/InsurancePage.jsx';
+import InnovationBoardPage from './pages/InnovationBoardPage.jsx';
+import CleaningSchedulePage from './pages/CleaningSchedulePage.jsx';
+import KeyManagementPage from './pages/KeyManagementPage.jsx';
+import TransportPage from './pages/TransportPage.jsx';
+import CafeteriaPage from './pages/CafeteriaPage.jsx';
+import InternalAnnouncementsPage from './pages/InternalAnnouncementsPage.jsx';
+import CctvLogPage from './pages/CctvLogPage.jsx';
+import EmergencyContactsPage from './pages/EmergencyContactsPage.jsx';
+import AccessControlPage from './pages/AccessControlPage.jsx';
+import FirstAidLogPage from './pages/FirstAidLogPage.jsx';
+import ParentReportsPage from './pages/ParentReportsPage.jsx';
+import DepartmentBudgetsPage from './pages/DepartmentBudgetsPage.jsx';
+import ProcurementPage from './pages/ProcurementPage.jsx';
+import MaintenanceRequestsPage from './pages/MaintenanceRequestsPage.jsx';
+import TaxCalculatorPage from './pages/TaxCalculatorPage.jsx';
+import TeacherGrowthPage from './pages/TeacherGrowthPage.jsx';
+import PeerReviewsPage from './pages/PeerReviewsPage.jsx';
+import MethodologyLibPage from './pages/MethodologyLibPage.jsx';
+import StudentProgressReportsPage from './pages/StudentProgressReportsPage.jsx';
+import ScholarshipApplicationsPage from './pages/ScholarshipApplicationsPage.jsx';
+import NpsScoresPage from './pages/NpsScoresPage.jsx';
+import ParentNotificationsPage from './pages/ParentNotificationsPage.jsx';
+import FranchiseDashboardPage from './pages/FranchiseDashboardPage.jsx';
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="h-full grid place-items-center"><Spinner /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// Dispatches /app/:key to the right page based on the menu item's `kind`.
+function RouteDispatcher() {
+  const { key } = useParams();
+  const { user } = useAuth();
+  const item = findItem(key);
+
+  if (!item) return <Navigate to="/app/command-center" replace />;
+  if (!canAccess(user.role, item)) {
+    return (
+      <div className="card p-10 text-center max-w-lg mx-auto">
+        <div className="text-4xl mb-3">🔒</div>
+        <h2 className="font-display text-xl text-navy-800">Ruxsat yo'q</h2>
+        <p className="text-navy-500 mt-2">Sizning rolingiz ({user.role}) bu bo'limga kirish huquqiga ega emas.</p>
+      </div>
+    );
+  }
+
+  return renderKind(item, key);
+}
+
+// Bitta menyu elementining `kind`iga mos sahifani qaytaradi.
+// RouteDispatcher (asosiy marshrut) va TabbedPage (birlashtirilgan menyu ichidagi tablar) ikkalasi ham shundan foydalanadi.
+export function renderKind(item, key) {
+  switch (item.kind) {
+    case 'tabs': return <TabbedPage item={item} />;
+    case 'dashboard': return <Dashboard />;
+    case 'resource': return <ResourcePage key={item.resource} resourceKey={item.resource} menuKey={key} />;
+    case 'groups': return <Groups />;
+    case 'crm': return <MarketingCrm />;
+    case 'attanalytics': return <AttendanceAnalytics />;
+    case 'accounting': return <Buxgalteriya />;
+    case 'conversion': return <Konversiya />;
+    case 'reception': return <Reception />;
+    case 'demolessons': return <DemoLessons />;
+    case 'waitinglist': return <WaitingList />;
+    case 'referrals': return <Referrals />;
+    case 'feedback': return <Feedback />;
+    case 'facecheckin': return <FaceCheckin />;
+    case 'branches': return <Branches />;
+    case 'tickets': return <Tickets />;
+    case 'leavemanagement': return <LeaveManagement />;
+    case 'evaluations': return <Evaluations />;
+    case 'bot': return <BotPage />;
+    case 'parentdashboard': return <ParentDashboard />;
+    case 'teachercoins': return <TeacherCoins />;
+    case 'coinbank': return <CoinBankPage />;
+    case 'coingift': return <CoinGiftPage />;
+    case 'lessonratings': return <LessonRatings />;
+    case 'workhours': return <WorkHoursTracker />;
+    case 'scheduleswap': return <ScheduleSwap />;
+    case 'advancerequest': return <StaffRequests kind="advance" />;
+    case 'expensereport': return <StaffRequests kind="expense" />;
+    case 'employeeofmonth': return <EmployeeOfMonth />;
+    case 'attendanceoverall': return <AttendanceOverall />;
+    case 'gradebook': return <GradeBook />;
+    case 'reportcards': return <ReportCards />;
+    case 'studentbehavior': return <StudentBehavior />;
+    case 'tasks': return <Tasks />;
+    case 'liveclassroom': return <LiveClassroom />;
+    case 'meetings': return <Meetings />;
+    case 'teacherportfolio': return <TeacherPortfolio />;
+    case 'lessonplans': return <LessonPlans />;
+    case 'groupanalytics': return <GroupAnalytics />;
+    case 'teacherkpi': return <TeacherKpi />;
+    case 'lessonlibrary': return <LessonLibrary />;
+    case 'roombooking': return <RoomBooking />;
+    case 'dailyjournal': return <DailyJournal />;
+    case 'homework': return <HomeworkPage />;
+    case 'placementtest': return <PlacementTest />;
+    case 'courses': return <CoursesPage />;
+    case 'exams': return <ExamsPage />;
+    case 'certificates': return <CertificatesPage />;
+    case 'librarypage': return <LibraryPage />;
+    case 'curriculumpage': return <CurriculumPage />;
+    case 'lessonspage': return <LessonsPage />;
+    case 'assignmentspage': return <AssignmentsPage />;
+    case 'dailybonuspage': return <DailyBonusPage />;
+    case 'birthdaybonuspage': return <BirthdayBonusPage />;
+    case 'avatarshoppage': return <AvatarShopPage />;
+    case 'essayspage': return <EssaysPage />;
+    case 'quizzespage': return <QuizzesPage />;
+    case 'videolessonspage': return <VideoLessonsPage />;
+    case 'homeworkreview': return <HomeworkReviewPage />;
+    case 'mockexams': return <MockExamsPage />;
+    case 'staff': return <Staff />;
+    case 'leaderboard': return <Leaderboard key={key} menuKey={key} />;
+    case 'enrollment': return <EnrollmentPage />;
+    case 'groupchange': return <GroupChangePage />;
+    case 'frozenstudents': return <FrozenStudentsPage />;
+    case 'alumni': return <AlumniPage />;
+    case 'studenttimeline': return <StudentTimelinePage />;
+    case 'activestudents': return <ActiveStudentsPage />;
+    case 'debtorspage': return <DebtorsPage />;
+    case 'expenses': return <ExpensesPage />;
+    case 'salaries': return <SalariesPage />;
+    case 'bonuses': return <StaffPaymentPage endpoint="/bonuses" personKey="staff" title="Bonuslar" subtitle="Xodimlarga berilgan bonuslar" positive />;
+    case 'fines': return <StaffPaymentPage endpoint="/fines" personKey="person" title="Jarimalar" subtitle="Xodimlarga qo'llanilgan jarimalar" positive={false} />;
+    case 'cashbox': return <CashboxPage />;
+    case 'bankaccounts': return <BankAccountsPage />;
+    case 'invoices': return <InvoicesPage />;
+    case 'discounts': return <DiscountsPage />;
+    case 'salespipeline': return <SalesPipelinePage />;
+    case 'leadspage': return <LeadsPage />;
+    case 'followups': return <FollowUpsPage />;
+    case 'campaigns': return <CampaignsPage />;
+    case 'rooms': return <RoomsPage />;
+    case 'inventory': return <InventoryPage />;
+    case 'documents': return <DocumentsPage />;
+    case 'contracts': return <ContractsPage />;
+    case 'positions': return <PositionsPage />;
+    case 'rules': return <RulesPage />;
+    case 'partnercompanies': return <PartnerCompaniesPage />;
+    case 'messagespage': return <MessagesPage />;
+    case 'olympiad': return <OlympiadPage />;
+    case 'debateclub': return <DebateClubPage />;
+    case 'speakingclub': return <SpeakingClubPage />;
+    case 'successstories': return <SuccessStoriesPage />;
+    case 'complaints': return <ComplaintsPage />;
+    case 'notificationsadmin': return <NotificationsAdminPage />;
+    case 'parentspage': return <ParentsPage />;
+    case 'missions': return <MissionsPage />;
+    case 'badgesadmin': return <BadgesAdminPage />;
+    case 'promocodes': return <PromoCodesPage />;
+    case 'streakrewards': return <StreakRewardsPage />;
+    case 'luckywheellog': return <LuckyWheelLogPage />;
+    case 'luckywheel': return <LuckyWheel />;
+    case 'mysterybox': return <MysteryBoxPage />;
+    case 'vipstatus': return <VipStatusPage />;
+    case 'dailypuzzle': return <DailyPuzzlePage />;
+    case 'votingpage': return <VotingPage />;
+    case 'bossfight': return <BossFightPage />;
+    case 'staffdirectory': return <StaffDirectoryPage />;
+    case 'worktenure': return <WorkTenurePage />;
+    case 'okrgoals': return <OkrGoalsPage />;
+    case 'hiringpipeline': return <HiringPipelinePage />;
+    case 'salarycalculator': return <SalaryCalculatorPage />;
+    case 'turnoverlog': return <TurnoverLogPage />;
+    case 'trainingtracker': return <TrainingTrackerPage />;
+    case 'internaljobs': return <InternalJobsPage />;
+    case 'mentorship': return <MentorshipPage />;
+    case 'exitinterviews': return <ExitInterviewsPage />;
+    case 'insurance': return <InsurancePage />;
+    case 'innovationboard': return <InnovationBoardPage />;
+    case 'cleaningschedule': return <CleaningSchedulePage />;
+    case 'keymanagement': return <KeyManagementPage />;
+    case 'transport': return <TransportPage />;
+    case 'cafeteria': return <CafeteriaPage />;
+    case 'internalannouncements': return <InternalAnnouncementsPage />;
+    case 'cctvlog': return <CctvLogPage />;
+    case 'emergencycontacts': return <EmergencyContactsPage />;
+    case 'accesscontrol': return <AccessControlPage />;
+    case 'firstaidlog': return <FirstAidLogPage />;
+    case 'parentreports': return <ParentReportsPage />;
+    case 'departmentbudgets': return <DepartmentBudgetsPage />;
+    case 'procurement': return <ProcurementPage />;
+    case 'maintenancerequests': return <MaintenanceRequestsPage />;
+    case 'taxcalculator': return <TaxCalculatorPage />;
+    case 'teachergrowth': return <TeacherGrowthPage />;
+    case 'peerreviews': return <PeerReviewsPage />;
+    case 'methodologylib': return <MethodologyLibPage />;
+    case 'studentprogressreports': return <StudentProgressReportsPage />;
+    case 'scholarshipapplications': return <ScholarshipApplicationsPage />;
+    case 'npsscores': return <NpsScoresPage />;
+    case 'parentnotifications': return <ParentNotificationsPage />;
+    case 'franchisedashboard': return <FranchiseDashboardPage />;
+    case 'reports': return <Reports key={key} menuKey={key} />;
+    case 'audit': return <Audit />;
+    case 'aiaudit': return <AiAudit />;
+    case 'roles': return <RolesPermissions />;
+    case 'coins': return <CoinGive />;
+    case 'shop': return <CoinShop />;
+    case 'passwords': return <Passwords />;
+    case 'aiassistant': return <AiAssistant />;
+    case 'coinexchange': return <CoinExchange />;
+    case 'coinhistory': return <CoinHistory />;
+    case 'minigames': return <MiniGames />;
+    case 'survey': return <SurveyVote />;
+    case 'chat': return <GroupChat />;
+    case 'coindash': return <CoinDashboard />;
+    case 'pointgive': return <PointGive />;
+    case 'tgrid': return <TeacherGrid />;
+    case 'ai': return <AiAnalytics />;
+    case 'attmark': return <AttendanceMark />;
+    case 'schedule': return <Schedule />;
+    case 'calendar': return <CalendarPage />;
+    case 'map': return <BranchesMap />;
+    case 'levels': return <Levels />;
+    case 'settings': return <Settings />;
+    default: return <Placeholder key={key} menuKey={key} />;
+  }
+}
+
+function LoginGate() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="h-full grid place-items-center"><Spinner /></div>;
+  if (user) return <Navigate to="/app/command-center" replace />;
+  return <Login />;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginGate />} />
+      <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/app/command-center" replace />} />
+        <Route path="students/:id" element={<StudentProfile />} />
+        <Route path=":key" element={<RouteDispatcher />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/app" replace />} />
+    </Routes>
+  );
+}
