@@ -1,0 +1,17 @@
+{
+  "name": "iso-termizy-lms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ISO Termizy Avlodlari — Til markazi uchun LMS/CRM/ERP (React + Vite + Tailwind + Node + SQLite)",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "seed": "npm --prefix server run seed",
+    "dev": "concurrently -n server,client -c yellow,cyan \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "start": "npm --prefix server run dev & npm --prefix client run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
