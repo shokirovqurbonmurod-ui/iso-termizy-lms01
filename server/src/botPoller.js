@@ -1,5 +1,5 @@
 import { store } from './db.js';
-import { notifySecurityOwners, notifyForStudent } from './telegram.js';
+import { notifySecurityOwners, notifyForStudent, notifyGroupTopic } from './telegram.js';
 
 const API = () => `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -163,6 +163,8 @@ const BUILTIN_COMMANDS = [
   { command: 'certificates', description: 'Sertifikatlar' },
   { command: 'announcements', description: "So'nggi e'lonlar" },
   { command: 'finance', description: "Qarzdorlar va oylik tushum (faqat moliya/rahbariyat)" },
+  { command: 'announce', description: "Guruhga e'lon yuborish (faqat rahbariyat)" },
+  { command: 'broadcast', description: "Hammaga xabar (faqat rahbariyat)" },
   { command: 'help', description: 'Yordam' },
 ];
 
@@ -180,6 +182,8 @@ function helpText() {
     "🏆 /certificates — sertifikatlar",
     "📢 /announcements — so'nggi e'lonlar",
     "📊 /finance — qarzdorlar va oylik tushum (faqat moliya/rahbariyat xodimlari)",
+    "📣 /announce Guruh nomi | Xabar — guruhga e'lon (faqat rahbariyat)",
+    "📢 /broadcast Xabar — hamma ulangan hisobga xabar (faqat rahbariyat)",
     "ℹ️ /help — shu yordam matni",
   ];
   for (const c of custom) lines.push(`/${c.command} — ${c.description || ''}`.trimEnd());
@@ -288,6 +292,9 @@ function commandReply(cmdName, link) {
 }
 
 const FINANCE_ROLES = ['founder', 'director', 'super_admin', 'branch_manager', 'admin', 'academic_manager', 'accountant', 'cashier'];
+// Faqat shaxsiy chatda ishlaydigan, argumentli xodim buyruqlari (/broadcast, /announce) uchun ruxsat ro'yxatlari.
+const BROADCAST_ROLES = ['founder', 'director', 'super_admin'];
+const ANNOUNCE_ROLES = ['founder', 'director', 'super_admin', 'branch_manager', 'admin', 'academic_manager'];
 // Guruhda ochiq javob berilsa boshqalarning qarzi/moliyasi oshkor bo'ladigan buyruqlar — shu ro'yxatga
 // qo'shilsa GURUHGA emas, so'rovchining shaxsiy chatiga yuboriladi. Hozircha bo'sh: /finance ataylab
 // istalgan guruhda ochiq javob berishi kerak deb tanlandi (foydalanuvchi so'rovi bo'yicha).
@@ -472,6 +479,40 @@ async function handleMessage(msg) {
   const link = store.where('telegram_links', (l) => l.chat_id === chatId)[0];
   if (!link) {
     return sendMessage(chatId, "Hisobingiz hali ulanmagan. Tizimdagi \"Bot\" sahifasidan kod olib, /start 123456 shaklida yuboring.");
+  }
+
+  // /broadcast <matn> — faqat rahbariyat: barcha ulangan hisoblarga birdaniga xabar (tizimdagi
+  // "Bot" sahifasidagi ommaviy xabar bilan bir xil, lekin botdan chiqmasdan tez yuboriladi).
+  if (text.startsWith('/broadcast')) {
+    if (!BROADCAST_ROLES.includes(link.role)) {
+      return sendMessage(chatId, "Bu buyruq faqat rahbariyat (direktor/founder/super admin) uchun ishlaydi.");
+    }
+    const body = text.replace(/^\/broadcast(@\S+)?/i, '').trim();
+    if (!body) {
+      return sendMessage(chatId, "Foydalanish:\n/broadcast Xabar matni\n\nMisol:\n/broadcast Ertaga bayram munosabati bilan darslar bo'lmaydi.");
+    }
+    const links = store.all('telegram_links');
+    await Promise.all(links.map((l) => sendMessage(l.chat_id, `📢 ${body}`).catch(() => {})));
+    reactTo(chatId, msg.message_id, REACTIONS.ok);
+    return sendMessage(chatId, `✅ Xabar ${links.length} ta ulangan hisobga yuborildi.`);
+  }
+
+  // /announce Guruh nomi | Xabar matni — guruhning Telegram topic'iga (yoki umumiy davomat
+  // guruhiga) e'lon yuboradi, tizimdagi "Bot" sahifasini ochmasdan.
+  if (text.startsWith('/announce')) {
+    if (!ANNOUNCE_ROLES.includes(link.role)) {
+      return sendMessage(chatId, "Bu buyruq faqat rahbariyat/akademik boshqaruv xodimlari uchun ishlaydi.");
+    }
+    const raw = text.replace(/^\/announce(@\S+)?/i, '').trim();
+    const sep = raw.indexOf('|');
+    const groupName = (sep === -1 ? '' : raw.slice(0, sep)).trim();
+    const body = (sep === -1 ? '' : raw.slice(sep + 1)).trim();
+    if (!groupName || !body) {
+      return sendMessage(chatId, "Foydalanish:\n/announce Guruh nomi | Xabar matni\n\nMisol:\n/announce Junior 11 | Ertaga dars 15:00 ga ko'chirildi.");
+    }
+    await notifyGroupTopic(groupName, `📢 ${body}`);
+    reactTo(chatId, msg.message_id, REACTIONS.ok);
+    return sendMessage(chatId, `✅ "${groupName}" guruhiga e'lon yuborildi.`);
   }
 
   sendChatAction(chatId, 'typing');
