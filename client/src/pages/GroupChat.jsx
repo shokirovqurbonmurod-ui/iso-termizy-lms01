@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Send, Hash, Users, User, Search, Plus, Smile, Paperclip, Image, UserPlus, X, Lock, KeyRound } from 'lucide-react';
+import { ArrowUp, Hash, Users, User, Search, Plus, Smile, Paperclip, Image, UserPlus, X, Lock, KeyRound, Mic, Video as VideoIcon, Trash2, Download, FileText, Reply, Pin, SmilePlus, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { Spinner } from '../components/ui.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { roleLabel, roleColor } from '../config/roles.js';
 
 const TABS = [
   { key: 'channels', icon: Hash, label: 'Kanallar' },
@@ -26,6 +25,9 @@ const DEF_CHANNELS = [
 ];
 
 const EMOJIS = ['😊','👍','❤️','🔥','👏','💪','✅','⭐','🎉','😂','🙏','💯','📚','✍️','🏆','💡','🎓','👋','😍','🤔'];
+const QUICK_REACTIONS = ['👍','❤️','😂','🔥','😮','🙏'];
+
+const BOT_NAME = 'ISO Termizy AI';
 
 const COLORS = ['from-blue-500 to-blue-700','from-emerald-500 to-emerald-700','from-violet-500 to-violet-700','from-amber-500 to-amber-700','from-rose-500 to-rose-700','from-cyan-500 to-cyan-700'];
 
@@ -44,6 +46,26 @@ function timeAgo(ts) {
   if (diff < 3600) return Math.floor(diff/60) + ' daq oldin';
   if (diff < 86400) return Math.floor(diff/3600) + ' soat oldin';
   return ts.slice(5, 16);
+}
+
+// Matn ichidagi "@Ism Familiya" ko'rinishidagi mentionlarni topib, alohida stil bilan chizadi —
+// eng uzun ismlardan boshlab qidiradi (aks holda "@Ali Vali" ichidagi "@Ali" qismi noto'g'ri mos kelib qolardi).
+function renderWithMentions(text, allUsers, myName) {
+  if (!text) return text;
+  const names = [...allUsers.map(u => u.full_name), myName].filter(Boolean)
+    .filter((n, i, arr) => arr.indexOf(n) === i).sort((a, b) => b.length - a.length);
+  if (!names.length) return text;
+  const pattern = new RegExp('@(' + names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?!\\w)', 'g');
+  const parts = [];
+  let last = 0, m;
+  while ((m = pattern.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const isMe = m[1] === myName;
+    parts.push(<span key={m.index} className={`font-bold ${isMe ? 'text-amber-700 bg-amber-100 rounded px-0.5' : 'text-[#0A84FF]'}`}>@{m[1]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
 }
 
 export default function GroupChat() {
@@ -65,28 +87,41 @@ export default function GroupChat() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [channelMembers, setChannelMembers] = useState({});
-  const [customItems, setCustomItems] = useState({ channels: [], groups: [] });
+  const [chatRooms, setChatRooms] = useState([]);
   const [joinCode, setJoinCode] = useState('');
   const [joinErr, setJoinErr] = useState('');
   const [joining, setJoining] = useState(false);
   const [showCode, setShowCode] = useState(false);
+  const [botTyping, setBotTyping] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [reactionPickerFor, setReactionPickerFor] = useState(null);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [recorder, setRecorder] = useState(null); // { kind: 'audio'|'video', seconds }
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const videoRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
 
   const isAdmin = ['founder','director','super_admin','branch_manager','admin','academic_manager','head_teacher'].includes(user.role);
   const isStaff = !['student', 'parent', 'guest'].includes(user.role);
 
   async function load() {
-    const [msgs, users, gr, mem] = await Promise.all([
+    const [msgs, users, gr, mem, rooms] = await Promise.all([
       api.get('/chat_messages').catch(() => []),
       api.get('/staff').catch(() => []),
       api.get('/groups').catch(() => []),
       api.get('/group_memberships').catch(() => []),
+      api.get('/chat_rooms').catch(() => []),
     ]);
     setMessages(msgs || []);
     setAllUsers(users || []);
     setGroups(gr || []);
     setMemberships((mem || []).map(m => m.group_name));
+    setChatRooms(rooms || []);
   }
 
   useEffect(() => { load(); const iv = setInterval(load, 4000); return () => clearInterval(iv); }, []);
@@ -117,12 +152,21 @@ export default function GroupChat() {
     key: g.name, icon: '👥', teacher: g.teacher, id: g.id,
   })), [groups]);
 
+  const botKey = useMemo(() => `DM:${[user.full_name, BOT_NAME].sort().join(':')}`, [user.full_name]);
+
+  const customChannels = useMemo(() => chatRooms.filter(r => r.type === 'channel').map(r => ({ key: r.name, icon: r.icon || '#️⃣', roomId: r.id })), [chatRooms]);
+  const customGroups = useMemo(() => chatRooms.filter(r => r.type === 'group').map(r => ({ key: r.name, icon: r.icon || '👥', roomId: r.id })), [chatRooms]);
+
   const items = useMemo(() => {
-    if (tab === 'channels') return [...visibleChannels, ...customItems.channels];
-    if (tab === 'groups') return [...groupItems, ...customItems.groups];
-    return allUsers.filter(u2 => u2.full_name !== user.full_name)
+    if (tab === 'channels') return [...visibleChannels, ...customChannels];
+    if (tab === 'groups') return [...groupItems, ...customGroups];
+    const humans = allUsers.filter(u2 => u2.full_name !== user.full_name)
       .map(u2 => ({ key: `DM:${[user.full_name, u2.full_name].sort().join(':')}`, icon: '👤', label: u2.full_name, role: u2.role_label }));
-  }, [tab, allUsers, customItems, user, visibleChannels, groupItems]);
+    const bot = { key: botKey, icon: '🤖', label: BOT_NAME, role: 'AI yordamchi' };
+    return [bot, ...humans];
+  }, [tab, allUsers, customChannels, customGroups, user, visibleChannels, groupItems, botKey]);
+
+  const isBotChannel = tab === 'private' && channel === botKey;
 
   const isLocked = tab === 'groups' && !isStaff && !isAdmin && !memberships.includes(channel) && groups.some(g => g.name === channel);
 
@@ -153,6 +197,8 @@ export default function GroupChat() {
       .sort((a, b) => (a.id || 0) - (b.id || 0));
   }, [messages, channel, tab]);
 
+  const pinnedInChannel = useMemo(() => filtered.filter(m => m.pinned), [filtered]);
+
   // Kanal a'zolari
   const members = useMemo(() => {
     const senders = [...new Set(filtered.map(m => m.sender))];
@@ -163,15 +209,36 @@ export default function GroupChat() {
     const msg = extraText || text.trim();
     if (!msg || sending) return;
     setSending(true);
+    const askBot = isBotChannel;
     try {
       await api.post('/chat_messages', {
         channel, sender: user.full_name, sender_role: user.role,
         text: msg,
         timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        reply_to: replyingTo?.id || undefined,
       });
       setText('');
       setShowEmoji(false);
+      setReplyingTo(null);
       await load();
+      if (askBot) {
+        setBotTyping(true);
+        const history = (messages || [])
+          .filter((m) => m.channel === botKey)
+          .slice(-12)
+          .map((m) => ({ role: m.sender === BOT_NAME ? 'assistant' : 'user', content: m.text }));
+        let reply = '';
+        try {
+          await api.aiChatStream({ message: msg, history, session: `chat-bot-${user.full_name}` }, (full) => { reply = full; });
+        } catch (e) { reply = "Kechirasiz, hozir javob bera olmadim. Birozdan so'ng qayta urinib ko'ring."; }
+        await api.post('/chat_messages', {
+          channel: botKey, sender: BOT_NAME, sender_role: 'bot',
+          text: reply || '...',
+          timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        }).catch(() => {});
+        setBotTyping(false);
+        await load();
+      }
     } catch (e) { console.error(e); }
     setSending(false);
     inputRef.current?.focus();
@@ -179,23 +246,129 @@ export default function GroupChat() {
 
   function addEmoji(e) { setText(prev => prev + e); }
 
+  async function togglePin(m) {
+    await api.put(`/chat_messages/${m.id}/pin`, {}).catch(() => {});
+    await load();
+  }
+
+  async function toggleReaction(m, emoji) {
+    setReactionPickerFor(null);
+    await api.post(`/chat_messages/${m.id}/react`, { emoji }).catch(() => {});
+    await load();
+  }
+
+  function reactionGroups(m) {
+    const list = Array.isArray(m.reactions) ? m.reactions : [];
+    const byEmoji = {};
+    for (const r of list) (byEmoji[r.emoji] ||= []).push(r.sender);
+    return Object.entries(byEmoji);
+  }
+
+  // "@" dan keyingi bo'shliqsiz so'zga qarab (masalan "@Diyor") mos keladigan foydalanuvchilarni
+  // taklif qiladi — tanlanganda to'liq ism qo'yiladi.
+  const mentionQuery = useMemo(() => {
+    const m = text.match(/@(\S{0,20})$/);
+    return m ? m[1] : null;
+  }, [text]);
+  const mentionSuggestions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return allUsers.filter(u => u.full_name.toLowerCase().split(' ').some(w => w.startsWith(q))).slice(0, 5);
+  }, [mentionQuery, allUsers]);
+
+  function pickMention(u) {
+    setText(prev => prev.replace(/@(\S{0,20})$/, `@${u.full_name} `));
+    inputRef.current?.focus();
+  }
+
   const fileRef = useRef(null);
   const imgRef = useRef(null);
 
-  function handleFile(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const size = (file.size / 1024).toFixed(0);
-    send('📎 Fayl: ' + file.name + ' (' + size + ' KB)');
-    e.target.value = '';
+  async function sendMedia(media_url, media_type, media_name, caption = '') {
+    await api.post('/chat_messages', {
+      channel, sender: user.full_name, sender_role: user.role,
+      text: caption, media_url, media_type, media_name,
+      timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    });
+    await load();
   }
 
-  function handleImage(e) {
+  async function handleFile(e) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const size = (file.size / 1024).toFixed(0);
-    send('🖼️ Rasm: ' + file.name + ' (' + size + ' KB)');
     e.target.value = '';
+    if (!file) return;
+    setUploadingMedia(true);
+    try {
+      const res = await api.upload(file);
+      await sendMedia(res.url, 'file', res.name);
+    } catch (err) { alert(err.message); }
+    setUploadingMedia(false);
+  }
+
+  async function handleImage(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingMedia(true);
+    try {
+      const res = await api.upload(file);
+      await sendMedia(res.url, 'image', res.name);
+    } catch (err) { alert(err.message); }
+    setUploadingMedia(false);
+  }
+
+  // ── Ovozli / video xabar yozib olish ──
+  async function startRecording(kind) {
+    try {
+      const constraints = kind === 'video' ? { video: true, audio: true } : { audio: true };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      chunksRef.current = [];
+      if (kind === 'video' && videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = (ev) => { if (ev.data.size > 0) chunksRef.current.push(ev.data); };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecorder({ kind, seconds: 0 });
+      timerRef.current = setInterval(() => setRecorder((r) => r ? { ...r, seconds: r.seconds + 1 } : r), 1000);
+    } catch (err) {
+      alert("Mikrofon/kameraga ruxsat berilmadi: " + err.message);
+    }
+  }
+
+  function stopStream() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    clearInterval(timerRef.current);
+  }
+
+  function cancelRecording() {
+    mediaRecorderRef.current?.stop();
+    stopStream();
+    setRecorder(null);
+    chunksRef.current = [];
+  }
+
+  async function finishRecording() {
+    const kind = recorder?.kind;
+    const mr = mediaRecorderRef.current;
+    if (!mr) return;
+    const blobPromise = new Promise((resolve) => { mr.onstop = () => resolve(new Blob(chunksRef.current, { type: mr.mimeType })); });
+    mr.stop();
+    stopStream();
+    setRecorder(null);
+    const blob = await blobPromise;
+    const ext = kind === 'video' ? 'webm' : 'webm';
+    const file = new File([blob], `${kind === 'video' ? 'video' : 'ovozli'}-xabar-${Date.now()}.${ext}`, { type: blob.type || (kind === 'video' ? 'video/webm' : 'audio/webm') });
+    setUploadingMedia(true);
+    try {
+      const res = await api.upload(file);
+      await sendMedia(res.url, kind === 'video' ? 'video' : 'audio', res.name);
+    } catch (err) { alert(err.message); }
+    setUploadingMedia(false);
   }
 
   function addMember(userName) {
@@ -219,23 +392,27 @@ export default function GroupChat() {
     (!memberSearch.trim() || u.full_name.toLowerCase().includes(memberSearch.toLowerCase()))
   );
 
-  function deleteItem(key) {
+  async function deleteItem(it) {
     if (!confirm('Rostdan o\'chirmoqchimisiz?')) return;
-    setCustomItems(prev => ({
-      ...prev,
-      [tab]: prev[tab].filter(it => it.key !== key),
-    }));
-    if (channel === key) setChannel(tab === 'channels' ? 'Umumiy' : groupItems[0]?.key || '');
+    await api.del(`/chat_rooms/${it.roomId}`).catch(() => {});
+    if (channel === it.key) setChannel(tab === 'channels' ? 'Umumiy' : groupItems[0]?.key || '');
+    await load();
   }
 
-  function addNew() {
+  async function addNew() {
     if (!newName.trim()) return;
-    setCustomItems(prev => ({
-      ...prev,
-      [tab]: [...prev[tab], { key: newName.trim(), icon: tab === 'channels' ? '#️⃣' : '👥' }],
-    }));
-    setChannel(newName.trim());
-    setShowNew(false); setNewName('');
+    try {
+      await api.post('/chat_rooms', {
+        type: tab === 'channels' ? 'channel' : 'group',
+        name: newName.trim(),
+        icon: tab === 'channels' ? '#️⃣' : '👥',
+        created_by: user.full_name,
+        date: new Date().toISOString().slice(0, 10),
+      });
+      setChannel(newName.trim());
+      setShowNew(false); setNewName('');
+      await load();
+    } catch (e) { alert(e.message); }
   }
 
   const displayChannel = tab === 'private'
@@ -268,29 +445,33 @@ export default function GroupChat() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-1 space-y-0.5">
+          <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
             {filteredItems.map(it => {
               const on = channel === it.key;
               const locked = tab === 'groups' && !isStaff && !isAdmin && !memberships.includes(it.key);
+              const count = msgCount(it.key);
               return (
-                <button key={it.key} onClick={() => setChannel(it.key)}
-                  className={`group w-full flex items-center gap-2 rounded-lg px-2.5 py-2 text-left transition ${
-                    on ? 'bg-gradient-to-r from-gold-400 to-gold-500 text-white shadow-sm' : 'hover:bg-navy-100/60 text-navy-700'}`}>
-                  <span className="text-sm">{it.icon}</span>
+                <div key={it.key} role="button" tabIndex={0} onClick={() => setChannel(it.key)}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setChannel(it.key)}
+                  className={`group w-full flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left transition cursor-pointer ${
+                    on ? 'bg-[#E9E9EB]' : 'hover:bg-navy-100/50'}`}>
+                  <span className="grid place-items-center w-10 h-10 rounded-full bg-white shadow-sm text-lg shrink-0">{it.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <div className={`text-xs font-semibold truncate ${on ? 'text-white' : ''}`}>{it.label || it.key}</div>
-                    {it.role && <div className={`text-[9px] ${on ? 'text-white/60' : 'text-navy-400'}`}>{it.role}</div>}
-                    {it.teacher && <div className={`text-[9px] ${on ? 'text-white/60' : 'text-navy-400'}`}>{it.teacher}</div>}
+                    <div className="text-[13px] font-semibold text-[#1c1c1e] truncate">{it.label || it.key}</div>
+                    {it.role && <div className="text-[10px] text-navy-400 truncate">{it.role}</div>}
+                    {it.teacher && <div className="text-[10px] text-navy-400 truncate">{it.teacher}</div>}
                   </div>
-                  {locked && <Lock size={11} className={on ? 'text-white/70' : 'text-navy-300'} />}
-                  {msgCount(it.key) > 0 && <span className={`text-[8px] font-bold rounded-full px-1 ${on ? 'bg-white/20' : 'bg-gold/15 text-gold-700'}`}>{msgCount(it.key)}</span>}
-                  {isAdmin && customItems[tab]?.some(c => c.key === it.key) && (
-                    <button onClick={(e) => { e.stopPropagation(); deleteItem(it.key); }}
-                      className={`opacity-0 group-hover:opacity-100 text-[10px] ${on ? 'text-white/60 hover:text-white' : 'text-red-400 hover:text-red-600'}`} title="O'chirish">
+                  {locked && <Lock size={12} className="text-navy-300 shrink-0" />}
+                  {count > 0 && (
+                    <span className="grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#0A84FF] text-white text-[9px] font-bold shrink-0">{count}</span>
+                  )}
+                  {isAdmin && it.roomId && (
+                    <button onClick={(e) => { e.stopPropagation(); deleteItem(it); }}
+                      className="opacity-0 group-hover:opacity-100 text-navy-300 hover:text-red-500 shrink-0" title="O'chirish">
                       <X size={12} />
                     </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -329,11 +510,30 @@ export default function GroupChat() {
                 {showCode ? (groups.find(g => g.name === channel)?.invite_code || '—') : 'Kodni ko\'rsatish'}
               </button>
             )}
+            {pinnedInChannel.length > 0 && (
+              <button onClick={() => setPinnedOpen(!pinnedOpen)} className="chip bg-navy-50 text-navy-600 hover:bg-navy-100 transition shrink-0" title="Qadalgan xabarlar">
+                <Pin size={11} className="inline -mt-0.5 mr-1" />
+                {pinnedInChannel.length} ta {pinnedOpen ? <ChevronUp size={11} className="inline -mt-0.5" /> : <ChevronDown size={11} className="inline -mt-0.5" />}
+              </button>
+            )}
             <button onClick={() => setShowMembers(!showMembers)} className="grid place-items-center w-8 h-8 rounded-lg hover:bg-navy-50 text-navy-400 transition" title="A'zolar">
               <UserPlus size={16} />
             </button>
             {isAdmin && <span className="chip bg-gold/10 text-gold-700 text-[9px]">Moderator</span>}
           </div>
+
+          {pinnedOpen && pinnedInChannel.length > 0 && (
+            <div className="border-b border-navy-100 bg-amber-50/60 max-h-32 overflow-y-auto">
+              {pinnedInChannel.map(m => (
+                <div key={m.id} className="flex items-center gap-2 px-4 py-1.5 text-xs border-b border-amber-100/70 last:border-0">
+                  <Pin size={11} className="text-amber-500 shrink-0" />
+                  <span className="font-semibold text-navy-700 shrink-0">{m.sender}:</span>
+                  <span className="text-navy-500 truncate flex-1">{m.text || (m.media_name || 'media')}</span>
+                  <button onClick={() => togglePin(m)} className="text-navy-300 hover:text-red-500 shrink-0" title="Qadashni bekor qilish"><X size={11} /></button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {isLocked ? (
             <div className="flex-1 grid place-items-center p-6">
@@ -356,34 +556,121 @@ export default function GroupChat() {
           ) : (
           <div className="flex flex-1 overflow-hidden">
             {/* Xabarlar */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5 bg-gradient-to-b from-navy-50/20 to-white">
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1 bg-white">
               {filtered.length === 0 ? (
                 <div className="text-center text-navy-400 text-sm py-20">Hali xabar yo'q</div>
-              ) : filtered.map(m => {
+              ) : filtered.map((m, i) => {
                 const isMe = m.sender === user.full_name;
-                const isFile = m.text?.startsWith('📎');
-                const isImg = m.text?.startsWith('🖼️');
+                const isBot = m.sender === BOT_NAME;
+                const mediaType = m.media_type;
+                const prev = filtered[i - 1];
+                const next = filtered[i + 1];
+                const sameAsPrev = prev && prev.sender === m.sender;
+                const sameAsNext = next && next.sender === m.sender;
+                const showHeader = !sameAsPrev; // ism/vaqt faqat ketma-ket guruhning birinchi xabarida
+                const mentionsMe = m.text && m.text.includes(`@${user.full_name}`);
+                const groups = reactionGroups(m);
                 return (
-                  <div key={m.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''} animate-fade`}>
-                    <div className={`grid place-items-center w-7 h-7 rounded-lg bg-gradient-to-br ${avatarColor(m.sender)} text-white text-[9px] font-bold shrink-0`}>
-                      {m.sender?.[0]?.toUpperCase()}
+                  <div key={m.id} className={`group flex gap-2 ${isMe ? 'flex-row-reverse' : ''} ${showHeader ? 'mt-3' : ''} animate-fade`}>
+                    <div className="w-7 shrink-0">
+                      {!sameAsNext && (
+                        <div className={`grid place-items-center w-7 h-7 rounded-full bg-gradient-to-br ${isBot ? 'from-violet-500 to-violet-700' : avatarColor(m.sender)} text-white text-[9px] font-bold`}>
+                          {isBot ? '🤖' : m.sender?.[0]?.toUpperCase()}
+                        </div>
+                      )}
                     </div>
-                    <div className={`max-w-[75%] ${isMe ? 'text-right' : ''}`}>
-                      <div className={`flex items-center gap-1 mb-0.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-                        <span className="text-[10px] font-bold text-navy-700">{m.sender}</span>
-                        <span className={`text-[8px] rounded-full px-1 ${roleColor(m.sender_role)}`}>{roleLabel(m.sender_role)}</span>
-                        <span className="text-[9px] text-navy-300">{timeAgo(m.timestamp)}</span>
+                    <div className={`max-w-[70%] relative ${isMe ? 'text-right' : ''}`}>
+                      {showHeader && (
+                        <div className={`flex items-center gap-1.5 mb-0.5 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
+                          <span className="text-[11px] font-semibold text-navy-600">{isMe ? 'Siz' : m.sender}</span>
+                          <span className="text-[9px] text-navy-300">{timeAgo(m.timestamp)}</span>
+                          {m.pinned && <Pin size={9} className="text-amber-500" />}
+                        </div>
+                      )}
+
+                      {/* Hover harakat paneli — Javob / Qadash / Reaksiya */}
+                      <div className={`absolute top-0 ${isMe ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} opacity-0 group-hover:opacity-100 transition flex items-center gap-0.5 bg-white shadow-sm border border-navy-100 rounded-full px-1 py-0.5 z-10`}>
+                        <button onClick={() => setReplyingTo({ id: m.id, sender: m.sender, text: m.text || m.media_name || 'media' })} className="p-1 rounded-full hover:bg-navy-50 text-navy-400" title="Javob berish"><Reply size={12} /></button>
+                        <button onClick={() => togglePin(m)} className={`p-1 rounded-full hover:bg-navy-50 ${m.pinned ? 'text-amber-500' : 'text-navy-400'}`} title={m.pinned ? 'Qadashni bekor qilish' : 'Qadash'}><Pin size={12} /></button>
+                        <button onClick={() => setReactionPickerFor(reactionPickerFor === m.id ? null : m.id)} className="p-1 rounded-full hover:bg-navy-50 text-navy-400" title="Reaksiya"><SmilePlus size={12} /></button>
                       </div>
-                      <div className={`inline-block rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-                        isFile ? 'bg-blue-50 border border-blue-200 text-blue-700 rounded-lg' :
-                        isImg ? 'bg-violet-50 border border-violet-200 text-violet-700 rounded-lg' :
-                        isMe ? 'bg-gradient-to-r from-gold-400 to-gold-500 text-white rounded-br-sm' :
-                        'bg-white border border-navy-100 text-navy-800 rounded-bl-sm shadow-sm'
-                      }`}>{m.text}</div>
+                      {reactionPickerFor === m.id && (
+                        <div className={`absolute top-6 ${isMe ? 'right-0' : 'left-0'} flex gap-0.5 bg-white shadow-md border border-navy-100 rounded-full px-1.5 py-1 z-20`}>
+                          {QUICK_REACTIONS.map(e => (
+                            <button key={e} onClick={() => toggleReaction(m, e)} className="text-base hover:scale-125 transition">{e}</button>
+                          ))}
+                        </div>
+                      )}
+
+                      {m.reply_to && (
+                        <div className={`text-[11px] text-navy-400 border-l-2 border-navy-200 pl-1.5 mb-0.5 truncate max-w-[220px] ${isMe ? 'ml-auto' : ''}`}>
+                          <span className="font-semibold text-navy-500">{m.reply_sender}:</span> {m.reply_snippet}
+                        </div>
+                      )}
+
+                      {mediaType === 'image' ? (
+                        <a href={api.fileUrl(m.media_url)} target="_blank" rel="noreferrer" className="inline-block overflow-hidden shadow-sm" style={{ borderRadius: 14 }}>
+                          <img src={api.fileUrl(m.media_url)} alt={m.media_name || 'rasm'} className="max-w-[220px] max-h-[280px] object-cover block" />
+                        </a>
+                      ) : mediaType === 'audio' ? (
+                        <div className={`inline-flex items-center gap-2 px-3 py-2.5 ${isMe ? 'bg-[#0A84FF]' : 'bg-[#E9E9EB]'}`} style={{ borderRadius: 18 }}>
+                          <Mic size={15} className={isMe ? 'text-white' : 'text-navy-500'} />
+                          <audio controls src={api.fileUrl(m.media_url)} className="h-8" style={{ maxWidth: 200 }} />
+                        </div>
+                      ) : mediaType === 'video' ? (
+                        <video controls src={api.fileUrl(m.media_url)} className="max-w-[240px] max-h-[280px] shadow-sm" style={{ borderRadius: 14 }} />
+                      ) : mediaType === 'file' ? (
+                        <a href={api.fileUrl(m.media_url)} target="_blank" rel="noreferrer"
+                          className={`inline-flex items-center gap-2 px-3.5 py-2.5 ${isMe ? 'bg-[#0A84FF] text-white' : 'bg-[#E9E9EB] text-[#1c1c1e]'}`} style={{ borderRadius: 18 }}>
+                          <FileText size={16} className="shrink-0" />
+                          <span className="text-[13px] font-medium truncate max-w-[150px]">{m.media_name || 'Fayl'}</span>
+                          <Download size={13} className="shrink-0 opacity-70" />
+                        </a>
+                      ) : (
+                        <div className={`inline-block px-3.5 py-2 text-[14px] leading-snug ${
+                          isBot ? 'bg-violet-50 text-violet-900 border border-violet-100' :
+                          isMe ? 'bg-[#0A84FF] text-white' :
+                          mentionsMe ? 'bg-amber-50 text-[#1c1c1e] border border-amber-200' :
+                          'bg-[#E9E9EB] text-[#1c1c1e]'
+                        }`}
+                          style={{
+                            borderRadius: 18,
+                            borderBottomRightRadius: isMe && !sameAsNext ? 4 : 18,
+                            borderTopRightRadius: isMe && sameAsPrev ? 4 : 18,
+                            borderBottomLeftRadius: !isMe && !sameAsNext ? 4 : 18,
+                            borderTopLeftRadius: !isMe && sameAsPrev ? 4 : 18,
+                          }}
+                        >{renderWithMentions(m.text, allUsers, user.full_name)}</div>
+                      )}
+
+                      {groups.length > 0 && (
+                        <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
+                          {groups.map(([emoji, senders]) => (
+                            <button key={emoji} onClick={() => toggleReaction(m, emoji)}
+                              className={`flex items-center gap-0.5 text-[11px] rounded-full px-1.5 py-0.5 border transition ${
+                                senders.includes(user.full_name) ? 'bg-gold/10 border-gold/40' : 'bg-navy-50 border-navy-100 hover:bg-navy-100'
+                              }`} title={senders.join(', ')}>
+                              <span>{emoji}</span><span className="text-navy-500 font-semibold">{senders.length}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
               })}
+              {botTyping && isBotChannel && (
+                <div className="flex gap-2 mt-3 animate-fade">
+                  <div className="grid place-items-center w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 text-white text-[9px] font-bold shrink-0">🤖</div>
+                  <div className="inline-block px-4 py-3 bg-[#E9E9EB]" style={{ borderRadius: 18, borderBottomLeftRadius: 4 }}>
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-navy-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-navy-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-navy-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={bottomRef} />
             </div>
 
@@ -472,34 +759,101 @@ export default function GroupChat() {
 
           {/* Input */}
           {!isLocked && (
-          <div className="px-3 py-2 border-t border-navy-100 bg-white">
-            {showEmoji && (
-              <div className="flex flex-wrap gap-1 mb-2 p-2 bg-navy-50 rounded-xl">
+          <div className="px-3 py-2.5 border-t border-navy-100 bg-white/90 backdrop-blur">
+            {replyingTo && (
+              <div className="flex items-center gap-2 mb-2 px-2.5 py-1.5 bg-navy-50 rounded-xl border-l-2 border-gold">
+                <Reply size={13} className="text-navy-400 shrink-0" />
+                <div className="flex-1 min-w-0 text-xs">
+                  <span className="font-semibold text-navy-600">{replyingTo.sender}:</span>{' '}
+                  <span className="text-navy-400 truncate">{replyingTo.text}</span>
+                </div>
+                <button onClick={() => setReplyingTo(null)} className="text-navy-300 hover:text-red-500 shrink-0"><X size={13} /></button>
+              </div>
+            )}
+
+            {mentionSuggestions.length > 0 && !recorder && (
+              <div className="flex flex-wrap gap-1 mb-2 p-1.5 bg-navy-50 rounded-xl">
+                {mentionSuggestions.map(u => (
+                  <button key={u.id} onClick={() => pickMention(u)}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-navy-100 hover:border-gold text-xs transition">
+                    <span className={`w-4 h-4 rounded-full grid place-items-center bg-gradient-to-br ${avatarColor(u.full_name)} text-white text-[7px] font-bold`}>{u.full_name[0]}</span>
+                    {u.full_name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showEmoji && !recorder && (
+              <div className="flex flex-wrap gap-1 mb-2 p-2 bg-navy-50 rounded-2xl">
                 {EMOJIS.map(e => (
                   <button key={e} onClick={() => addEmoji(e)} className="text-xl hover:scale-125 transition">{e}</button>
                 ))}
               </div>
             )}
-            <div className="flex gap-1.5 items-center">
-              <button onClick={() => setShowEmoji(!showEmoji)} className="grid place-items-center w-9 h-9 rounded-xl hover:bg-navy-50 text-navy-400 transition" title="Emoji">
-                <Smile size={18} />
-              </button>
-              <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
-              <button onClick={() => fileRef.current?.click()} className="grid place-items-center w-9 h-9 rounded-xl hover:bg-navy-50 text-navy-400 transition" title="Fayl yuklash">
-                <Paperclip size={18} />
-              </button>
-              <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
-              <button onClick={() => imgRef.current?.click()} className="grid place-items-center w-9 h-9 rounded-xl hover:bg-navy-50 text-navy-400 transition" title="Rasm yuklash">
-                <Image size={18} />
-              </button>
-              <input ref={inputRef} className="input !py-2 flex-1 !rounded-2xl text-sm" placeholder="Xabar..."
-                value={text} onChange={e => setText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())} />
-              <button onClick={() => send()} disabled={!text.trim() || sending}
-                className="grid place-items-center w-10 h-10 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-500 text-white shadow-md hover:shadow-lg transition disabled:opacity-30">
-                <Send size={16} />
-              </button>
-            </div>
+
+            {recorder ? (
+              <div className="flex items-center gap-3">
+                {recorder.kind === 'video' && (
+                  <video ref={videoRef} muted className="w-20 h-14 rounded-xl object-cover bg-navy-900 shrink-0" />
+                )}
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                  <span className="text-sm font-semibold text-navy-700 tabular-nums">
+                    {String(Math.floor(recorder.seconds / 60)).padStart(2, '0')}:{String(recorder.seconds % 60).padStart(2, '0')}
+                  </span>
+                  <span className="text-xs text-navy-400">{recorder.kind === 'video' ? 'Video yozilmoqda...' : 'Ovoz yozilmoqda...'}</span>
+                </div>
+                <button onClick={cancelRecording} className="grid place-items-center w-9 h-9 rounded-full hover:bg-red-50 text-red-500 transition shrink-0" title="Bekor qilish">
+                  <Trash2 size={17} />
+                </button>
+                <button onClick={finishRecording} className="grid place-items-center w-9 h-9 rounded-full bg-[#0A84FF] text-white shadow-sm shrink-0" title="Yuborish">
+                  <ArrowUp size={17} strokeWidth={2.5} />
+                </button>
+              </div>
+            ) : uploadingMedia ? (
+              <div className="flex items-center justify-center gap-2 py-2 text-sm text-navy-400">
+                <div className="w-4 h-4 border-2 border-navy-300 border-t-[#0A84FF] rounded-full animate-spin" /> Yuborilmoqda...
+              </div>
+            ) : (
+              <div className="flex gap-1 items-center">
+                <button onClick={() => setShowEmoji(!showEmoji)} className="grid place-items-center w-8 h-8 rounded-full hover:bg-navy-50 text-navy-400 transition shrink-0" title="Emoji">
+                  <Smile size={19} />
+                </button>
+                <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
+                <button onClick={() => fileRef.current?.click()} className="grid place-items-center w-8 h-8 rounded-full hover:bg-navy-50 text-navy-400 transition shrink-0" title="Fayl yuklash">
+                  <Paperclip size={18} />
+                </button>
+                <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
+                <button onClick={() => imgRef.current?.click()} className="grid place-items-center w-8 h-8 rounded-full hover:bg-navy-50 text-navy-400 transition shrink-0" title="Rasm yuklash">
+                  <Image size={18} />
+                </button>
+                <input ref={inputRef}
+                  className="flex-1 !rounded-full border border-navy-200 bg-[#F2F2F7] px-4 py-2 text-[14px] outline-none focus:border-[#0A84FF] focus:bg-white transition"
+                  placeholder="Xabar..."
+                  value={text} onChange={e => setText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key !== 'Enter' || e.shiftKey) return;
+                    e.preventDefault();
+                    if (mentionSuggestions.length > 0) pickMention(mentionSuggestions[0]);
+                    else send();
+                  }} />
+                {text.trim() ? (
+                  <button onClick={() => send()} disabled={sending}
+                    className="grid place-items-center w-8 h-8 rounded-full bg-[#0A84FF] text-white shadow-sm transition disabled:opacity-30 shrink-0">
+                    <ArrowUp size={17} strokeWidth={2.5} />
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={() => startRecording('video')} className="grid place-items-center w-8 h-8 rounded-full hover:bg-navy-50 text-navy-400 transition shrink-0" title="Video xabar">
+                      <VideoIcon size={18} />
+                    </button>
+                    <button onClick={() => startRecording('audio')} className="grid place-items-center w-8 h-8 rounded-full hover:bg-navy-50 text-navy-400 transition shrink-0" title="Ovozli xabar">
+                      <Mic size={18} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
           )}
         </div>
