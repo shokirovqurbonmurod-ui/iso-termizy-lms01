@@ -9,7 +9,10 @@ const r = express.Router();
 r.use(authRequired);
 
 const today = () => new Date().toISOString().slice(0, 10);
-const REWARD_COINS = 15;
+// Coin yig'ish qiyinroq bo'lishi uchun — kichik, tasodifiy 1-3 coin mukofot (avvalgi qat'iy 15 o'rniga).
+const REWARD_MIN = 1;
+const REWARD_MAX = 3;
+function randomReward() { return REWARD_MIN + Math.floor(Math.random() * (REWARD_MAX - REWARD_MIN + 1)); }
 
 const QUESTIONS = [
   { q: "O'zbekistonning poytaxti qaysi shahar?", options: ['Samarqand', 'Toshkent', 'Buxoro', 'Andijon'], correct: 1 },
@@ -50,7 +53,7 @@ r.get('/today', (req, res) => {
   res.json({
     date: today(), question: puzzle.q, options: puzzle.options,
     answered: !!mine, correct: mine ? !!mine.correct : null,
-    reward: REWARD_COINS,
+    reward: mine ? mine.reward : `${REWARD_MIN}-${REWARD_MAX}`,
   });
 });
 
@@ -63,18 +66,19 @@ r.post('/answer', (req, res) => {
   const { choice } = req.body || {};
   const puzzle = QUESTIONS[dayIndex()];
   const isCorrect = Number(choice) === puzzle.correct;
+  const reward = isCorrect ? randomReward() : 0;
 
   if (isCorrect) {
-    const newBalance = (Number(student.coins) || 0) + REWARD_COINS;
-    store.update('students', student.id, { coins: newBalance, points: (Number(student.points) || 0) + REWARD_COINS });
-    store.insert('coin_log', { student: student.full_name, amount: REWARD_COINS, reason: 'Kunlik topishmoq', given_by: 'system', at: new Date().toISOString().slice(0, 19).replace('T', ' ') });
+    const newBalance = (Number(student.coins) || 0) + reward;
+    store.update('students', student.id, { coins: newBalance, points: (Number(student.points) || 0) + reward });
+    store.insert('coin_log', { student: student.full_name, amount: reward, reason: 'Kunlik topishmoq', given_by: 'system', at: new Date().toISOString().slice(0, 19).replace('T', ' ') });
   }
-  const row = store.insert('daily_puzzle', { student: student.full_name, date: today(), correct: isCorrect ? 1 : 0, reward: isCorrect ? REWARD_COINS : 0 });
+  const row = store.insert('daily_puzzle', { student: student.full_name, date: today(), correct: isCorrect ? 1 : 0, reward });
   logAudit(student.full_name, 'daily puzzle answer', isCorrect ? 'correct' : 'wrong');
   if (isCorrect) {
-    notifyForStudent(student.id, `🧩 Farzandingiz ${student.full_name} bugungi kunlik topishmoqni to'g'ri topdi va ${REWARD_COINS} coin yutdi!`).catch(() => {});
+    notifyForStudent(student.id, `🧩 Farzandingiz ${student.full_name} bugungi kunlik topishmoqni to'g'ri topdi va ${reward} coin yutdi!`).catch(() => {});
   }
-  res.json({ correct: isCorrect, correctIndex: puzzle.correct, reward: isCorrect ? REWARD_COINS : 0, row });
+  res.json({ correct: isCorrect, correctIndex: puzzle.correct, reward, row });
 });
 
 export default r;
