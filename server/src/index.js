@@ -41,6 +41,7 @@ import pettyCashRoutes from './routes/pettyCash.js';
 import travelRequestsRoutes from './routes/travelRequests.js';
 import diaryRoutes from './routes/diary.js';
 import eventTicketsRoutes from './routes/eventTickets.js';
+import announcementsRoutes from './routes/announcements.js';
 import { startBillingScheduler } from './billing.js';
 import { startBotPolling } from './botPoller.js';
 import { crudRouter, rewardCrudRouter } from './crud.js';
@@ -124,8 +125,7 @@ app.use('/api/expenses', crudRouter('expenses',
   ['title', 'amount', 'category', 'date']));
 app.use('/api/salaries', crudRouter('salaries',
   ['name', 'role', 'base', 'bonus', 'total']));
-app.use('/api/announcements', crudRouter('announcements',
-  ['title', 'body', 'author', 'type', 'date']));
+app.use('/api/announcements', announcementsRoutes);
 app.use('/api/lessons', crudRouter('lessons',
   ['title', 'subject', 'group_name', 'teacher', 'date', 'time', 'room', 'duration', 'status', 'video_url', 'coin_reward', 'note']));
 app.use('/api/assignments', crudRouter('assignments',
