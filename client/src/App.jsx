@@ -131,6 +131,7 @@ import RulesPage from './pages/RulesPage.jsx';
 import PartnerCompaniesPage from './pages/PartnerCompaniesPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
 import AnnouncementCenterPage from './pages/AnnouncementCenterPage.jsx';
+import CommunicationDashboardPage from './pages/CommunicationDashboardPage.jsx';
 import OlympiadPage from './pages/OlympiadPage.jsx';
 import DebateClubPage from './pages/DebateClubPage.jsx';
 import SpeakingClubPage from './pages/SpeakingClubPage.jsx';
@@ -324,6 +325,7 @@ export function renderKind(item, key) {
     case 'partnercompanies': return <PartnerCompaniesPage />;
     case 'messagespage': return <MessagesPage />;
     case 'announcementcenter': return <AnnouncementCenterPage />;
+    case 'communicationdashboard': return <CommunicationDashboardPage />;
     case 'olympiad': return <OlympiadPage />;
     case 'debateclub': return <DebateClubPage />;
     case 'speakingclub': return <SpeakingClubPage />;

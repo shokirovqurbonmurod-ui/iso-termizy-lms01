@@ -42,6 +42,7 @@ import travelRequestsRoutes from './routes/travelRequests.js';
 import diaryRoutes from './routes/diary.js';
 import eventTicketsRoutes from './routes/eventTickets.js';
 import announcementsRoutes from './routes/announcements.js';
+import communicationRoutes from './routes/communication.js';
 import { startBillingScheduler } from './billing.js';
 import { startBotPolling } from './botPoller.js';
 import { crudRouter, rewardCrudRouter } from './crud.js';
@@ -126,6 +127,7 @@ app.use('/api/expenses', crudRouter('expenses',
 app.use('/api/salaries', crudRouter('salaries',
   ['name', 'role', 'base', 'bonus', 'total']));
 app.use('/api/announcements', announcementsRoutes);
+app.use('/api/communication', communicationRoutes);
 app.use('/api/lessons', crudRouter('lessons',
   ['title', 'subject', 'group_name', 'teacher', 'date', 'time', 'room', 'duration', 'status', 'video_url', 'coin_reward', 'note']));
 app.use('/api/assignments', crudRouter('assignments',

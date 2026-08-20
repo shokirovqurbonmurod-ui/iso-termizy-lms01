@@ -201,6 +201,7 @@ export const MENU = [
     group: 'Aloqa & Gamifikatsiya',
     items: [
       { key: 'chat-messages', label: 'Chat & Xabarlar', icon: MessageCircle, kind: 'tabs', roles: null, tabs: [
+        { key: 'comm-dashboard', label: 'Aloqa paneli', icon: LayoutDashboard, kind: 'communicationdashboard', roles: null },
         { key: 'group-chat', label: 'Guruh chat', icon: MessageCircle, kind: 'chat', roles: null },
         { key: 'internal-chat', label: 'Ichki xabarlar', icon: Send, kind: 'chat', roles: null },
         { key: 'xabar-yuborish', label: 'Xabar yuborish', icon: Send, kind: 'messagespage', roles: ['director','super_admin','admin','marketing','smm'] },
