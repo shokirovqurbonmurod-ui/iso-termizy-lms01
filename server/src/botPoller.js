@@ -467,8 +467,11 @@ async function handleMessage(msg) {
       return sendMessage(chatId, "❌ Kod noto'g'ri yoki muddati o'tgan (10 daqiqa). Tizimdan yangi kod oling.");
     }
 
-    const existing = store.where('telegram_links', (l) => l.user_id === pending.user_id)[0];
-    if (existing) store.remove('telegram_links', existing.id);
+    // Ham eski (shu tizim hisobiga tegishli) ham eski (shu Telegram chatiga tegishli) linklar
+    // o'chiriladi — aks holda bitta Telegram chat ikkita tizim hisobiga ulangan holda qolib,
+    // keyingi buyruqlar qaysi hisobga tegishli ekani noaniq bo'lib qolardi.
+    const stale = store.where('telegram_links', (l) => l.user_id === pending.user_id || l.chat_id === chatId);
+    for (const s of stale) store.remove('telegram_links', s.id);
     store.insert('telegram_links', {
       chat_id: chatId, user_id: pending.user_id, user_name: pending.user_name, role: pending.role, linked_at: now(),
     });
