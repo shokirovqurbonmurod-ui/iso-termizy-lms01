@@ -37,6 +37,10 @@ import vipStatusRoutes from './routes/vipStatus.js';
 import dailyPuzzleRoutes from './routes/dailyPuzzle.js';
 import votingRoutes from './routes/voting.js';
 import bossFightRoutes from './routes/bossFight.js';
+import pettyCashRoutes from './routes/pettyCash.js';
+import travelRequestsRoutes from './routes/travelRequests.js';
+import diaryRoutes from './routes/diary.js';
+import eventTicketsRoutes from './routes/eventTickets.js';
 import { startBillingScheduler } from './billing.js';
 import { startBotPolling } from './botPoller.js';
 import { crudRouter, rewardCrudRouter } from './crud.js';
@@ -85,6 +89,7 @@ app.use('/api/vip-status', vipStatusRoutes);
 app.use('/api/daily-puzzle', dailyPuzzleRoutes);
 app.use('/api/voting', votingRoutes);
 app.use('/api/boss-fight', bossFightRoutes);
+app.use('/api/event-tickets', eventTicketsRoutes);
 
 startBotPolling();
 startBillingScheduler();
@@ -237,6 +242,8 @@ app.use('/api/partner_companies', crudRouter('partner_companies',
   ['name', 'type', 'contact', 'agreement', 'status']));
 app.use('/api/tickets', crudRouter('tickets',
   ['title', 'from_name', 'category', 'priority', 'date', 'assigned_to', 'status']));
+app.use('/api/ticket_replies', crudRouter('ticket_replies',
+  ['ticket_id', 'author', 'author_role', 'message', 'at']));
 app.use('/api/resource_center', crudRouter('resource_center',
   ['title', 'category', 'format', 'subject', 'downloads', 'status']));
 app.use('/api/debate_club', crudRouter('debate_club',
@@ -250,6 +257,9 @@ app.use('/api/essays', crudRouter('essays',
 app.use('/api/survey_votes', crudRouter('survey_votes',
   ['survey', 'voter', 'vote', 'comment', 'date']));
 app.use('/api/chat_messages', chatRoutes);
+app.use('/api/chat_rooms', crudRouter('chat_rooms', ['type', 'name', 'icon', 'created_by', 'date', 'invite_code']));
+app.use('/api/chat_custom_emojis', crudRouter('chat_custom_emojis', ['emoji', 'added_by', 'date']));
+app.use('/api/chat_premium', crudRouter('chat_premium', ['student', 'purchased_at', 'expires_at', 'cost_coins']));
 app.use('/api/group_memberships', groupMembershipsRoutes);
 app.use('/api/notifications', crudRouter('notifications',
   ['title', 'body', 'type', 'target_role', 'read', 'date']));
@@ -383,14 +393,17 @@ app.use('/api/karaoke', crudRouter('karaoke', ['student', 'song', 'date', 'score
 app.use('/api/whiteboard_sessions', crudRouter('whiteboard_sessions', ['title', 'teacher', 'group_name', 'date', 'status']));
 app.use('/api/podcast_episodes', crudRouter('podcast_episodes', ['title', 'host', 'duration_min', 'date', 'status']));
 app.use('/api/student_voting', crudRouter('student_voting', ['title', 'options', 'votes_count', 'status']));
-app.use('/api/live_streams', crudRouter('live_streams', ['title', 'host', 'date', 'time', 'status']));
-app.use('/api/story_posts', crudRouter('story_posts', ['student', 'caption', 'date']));
+app.use('/api/live_streams', crudRouter('live_streams', ['title', 'host', 'date', 'time', 'link', 'status']));
+app.use('/api/story_posts', crudRouter('story_posts', ['student', 'caption', 'image_url', 'date']));
+app.use('/api/post_likes', crudRouter('post_likes', ['post_id', 'student', 'date']));
 app.use('/api/check_ins', crudRouter('check_ins', ['student', 'location', 'date', 'time']));
-app.use('/api/virtual_rooms', crudRouter('virtual_rooms', ['name', 'capacity', 'host', 'status']));
+app.use('/api/virtual_rooms', crudRouter('virtual_rooms', ['name', 'capacity', 'host', 'link', 'status']));
+app.use('/api/virtual_room_members', crudRouter('virtual_room_members', ['room_id', 'student', 'date']));
 app.use('/api/file_manager', crudRouter('file_manager', ['filename', 'folder', 'uploaded_by', 'date']));
 app.use('/api/daily_puzzle', crudRouter('daily_puzzle', ['title', 'difficulty', 'date', 'solved_by']));
 app.use('/api/boss_fights', crudRouter('boss_fights', ['title', 'level', 'participants', 'winner', 'status']));
 app.use('/api/fitness_challenge', crudRouter('fitness_challenge', ['title', 'target', 'participants', 'date', 'status']));
+app.use('/api/fitness_logs', crudRouter('fitness_logs', ['challenge_id', 'student', 'amount', 'date']));
 app.use('/api/stock_game', crudRouter('stock_game', ['student', 'portfolio_value', 'rank', 'date']));
 app.use('/api/chat_voice', crudRouter('chat_voice', ['from_name', 'to_name', 'duration_sec', 'date']));
 app.use('/api/video_lessons', crudRouter('video_lessons', ['title', 'subject', 'teacher', 'duration_min', 'url']));
@@ -400,11 +413,12 @@ app.use('/api/social_shares', crudRouter('social_shares', ['student', 'platform'
 app.use('/api/theme_settings', crudRouter('theme_settings', ['user', 'theme_name', 'primary_color']));
 app.use('/api/calculator_history', crudRouter('calculator_history', ['user', 'expression', 'result', 'date']));
 app.use('/api/study_groups', crudRouter('study_groups', ['name', 'subject', 'members_count', 'meeting_time']));
+app.use('/api/study_group_members', crudRouter('study_group_members', ['group_id', 'student', 'date']));
 app.use('/api/marketplace', crudRouter('marketplace', ['item_name', 'seller', 'price', 'status']));
 app.use('/api/event_tickets', crudRouter('event_tickets', ['event_title', 'buyer', 'price', 'date', 'status']));
 app.use('/api/tournament_bracket', crudRouter('tournament_bracket', ['tournament_name', 'round', 'participant_a', 'participant_b', 'winner']));
 app.use('/api/role_play_scenarios', crudRouter('role_play_scenarios', ['title', 'level', 'description', 'status']));
-app.use('/api/diary', crudRouter('diary', ['student', 'entry_date', 'content']));
+app.use('/api/diary', diaryRoutes);
 app.use('/api/world_map', crudRouter('world_map', ['region', 'description', 'unlocked']));
 app.use('/api/e_library', crudRouter('e_library', ['title', 'author', 'category', 'file_url']));
 app.use('/api/booking_slots', crudRouter('booking_slots', ['resource_name', 'date', 'time_start', 'time_end', 'booked_by']));
@@ -414,6 +428,7 @@ app.use('/api/anti_cheat_log', crudRouter('anti_cheat_log', ['student', 'exam', 
 app.use('/api/activity_log', crudRouter('activity_log', ['user', 'action', 'date', 'time']));
 app.use('/api/anonymous_feedback', crudRouter('anonymous_feedback', ['message', 'category', 'date']));
 app.use('/api/subscription_boxes', crudRouter('subscription_boxes', ['box_name', 'frequency', 'price', 'subscribers']));
+app.use('/api/subscription_members', crudRouter('subscription_members', ['box_id', 'student', 'date', 'status']));
 app.use('/api/social_media_posts', crudRouter('social_media_posts', ['platform', 'content', 'likes', 'date', 'status']));
 app.use('/api/website_analytics', crudRouter('website_analytics', ['period', 'visits', 'new_visitors_pct', 'date']));
 app.use('/api/seo_tracker', crudRouter('seo_tracker', ['keyword', 'position', 'search_engine', 'date']));
@@ -429,9 +444,9 @@ app.use('/api/budget_planning', crudRouter('budget_planning', ['category', 'peri
 app.use('/api/financial_reports', crudRouter('financial_reports', ['title', 'period', 'net_profit', 'date']));
 app.use('/api/tax_reports', crudRouter('tax_reports', ['period', 'tax_amount', 'status']));
 app.use('/api/overtime_log', crudRouter('overtime_log', ['staff', 'hours', 'date', 'status']));
-app.use('/api/travel_requests', crudRouter('travel_requests', ['staff', 'destination', 'date', 'status']));
+app.use('/api/travel_requests', travelRequestsRoutes);
 app.use('/api/reimbursements', crudRouter('reimbursements', ['staff', 'amount', 'reason', 'status']));
-app.use('/api/petty_cash', crudRouter('petty_cash', ['title', 'amount', 'date']));
+app.use('/api/petty_cash', pettyCashRoutes);
 app.use('/api/vendor_management', crudRouter('vendor_management', ['name', 'category', 'contact', 'status']));
 app.use('/api/compliance_checklist', crudRouter('compliance_checklist', ['item', 'category', 'status']));
 app.use('/api/risk_register', crudRouter('risk_register', ['title', 'level', 'mitigation', 'status']));
@@ -445,7 +460,8 @@ app.use('/api/software_licenses', crudRouter('software_licenses', ['software', '
 app.use('/api/network_monitoring', crudRouter('network_monitoring', ['device', 'status', 'last_check']));
 app.use('/api/system_updates', crudRouter('system_updates', ['version', 'notes', 'date', 'status']));
 app.use('/api/bug_reports', crudRouter('bug_reports', ['title', 'reported_by', 'severity', 'status']));
-app.use('/api/feature_requests', crudRouter('feature_requests', ['title', 'requested_by', 'status']));
+app.use('/api/feature_requests', crudRouter('feature_requests', ['title', 'requested_by', 'votes', 'status']));
+app.use('/api/feature_request_votes', crudRouter('feature_request_votes', ['request_id', 'student', 'date']));
 app.use('/api/app_analytics', crudRouter('app_analytics', ['period', 'active_users', 'sessions']));
 app.use('/api/api_usage', crudRouter('api_usage', ['endpoint', 'calls', 'date']));
 app.use('/api/error_log', crudRouter('error_log', ['message', 'level', 'date']));
