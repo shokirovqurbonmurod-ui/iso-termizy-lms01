@@ -116,7 +116,10 @@ function mainMenuKeyboard(role) {
       [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }],
     ];
   } else if (FINANCE_ROLES.includes(role)) {
-    rows = [[{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: '📊 Moliya', callback_data: 'finance' }]];
+    rows = [
+      [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: '📊 Moliya', callback_data: 'finance' }],
+      [{ text: '📈 Statistika', callback_data: 'stats' }, { text: '🎫 Tiketlar', callback_data: 'tickets' }],
+    ];
     // Rahbariyat/akademik boshqaruv uchun qo'shimcha amal tugmalari — bosilganda bot keyingi
     // yozilgan matnni o'sha amalning mazmuni sifatida kutadi (setPendingAction/takePendingAction).
     const adminRow = [];
@@ -124,6 +127,20 @@ function mainMenuKeyboard(role) {
     if (ANNOUNCE_ROLES.includes(role)) adminRow.push({ text: "📣 Guruhga e'lon", callback_data: 'menu:announce' });
     if (adminRow.length) rows.push(adminRow);
     rows.push([{ text: 'ℹ️ Yordam', callback_data: 'help' }]);
+  } else if (TEACHER_ROLES.includes(role)) {
+    rows = [
+      [{ text: '👥 Guruhlarim', callback_data: 'mygroups' }, { text: "🎓 O'quvchilarim", callback_data: 'mystudents' }],
+      [{ text: '📊 KPI', callback_data: 'kpi' }, { text: "📢 E'lonlar", callback_data: 'announcements' }],
+      [{ text: 'ℹ️ Yordam', callback_data: 'help' }],
+    ];
+  } else if (role === 'parent') {
+    rows = [
+      [{ text: '👨‍👩‍👧 Farzandim', callback_data: 'child' }, { text: '🪙 Balans', callback_data: 'childbalance' }],
+      [{ text: '📋 Davomat', callback_data: 'childattendance' }, { text: '📝 Imtihonlar', callback_data: 'childexams' }],
+      [{ text: '📚 Uy vazifa', callback_data: 'childhomework' }, { text: '💳 To\'lovlar', callback_data: 'childpayments' }],
+      [{ text: '📅 Uchrashuvlar', callback_data: 'meetings' }, { text: "📢 E'lonlar", callback_data: 'announcements' }],
+      [{ text: 'ℹ️ Yordam', callback_data: 'help' }],
+    ];
   } else {
     rows = [[{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }]];
   }
@@ -215,8 +232,20 @@ const BUILTIN_COMMANDS = [
   { command: 'certificates', description: 'Sertifikatlar' },
   { command: 'announcements', description: "So'nggi e'lonlar" },
   { command: 'finance', description: "Qarzdorlar va oylik tushum (faqat moliya/rahbariyat)" },
+  { command: 'stats', description: "Umumiy statistika (faqat rahbariyat)" },
+  { command: 'tickets', description: "Ochiq tiketlar (faqat rahbariyat)" },
   { command: 'announce', description: "Guruhga e'lon yuborish (faqat rahbariyat)" },
   { command: 'broadcast', description: "Hammaga xabar (faqat rahbariyat)" },
+  { command: 'mygroups', description: "Guruhlarim (faqat o'qituvchi)" },
+  { command: 'mystudents', description: "O'quvchilarim soni (faqat o'qituvchi)" },
+  { command: 'kpi', description: "KPI ko'rsatkichim (faqat o'qituvchi)" },
+  { command: 'child', description: "Farzandim ma'lumotlari (faqat ota-ona)" },
+  { command: 'childbalance', description: "Farzandim balansi (faqat ota-ona)" },
+  { command: 'childattendance', description: "Farzandim davomati (faqat ota-ona)" },
+  { command: 'childexams', description: "Farzandim imtihon natijalari (faqat ota-ona)" },
+  { command: 'childhomework', description: "Farzandim uy vazifalari (faqat ota-ona)" },
+  { command: 'childpayments', description: "Farzandim to'lovlari (faqat ota-ona)" },
+  { command: 'meetings', description: "Ota-ona uchrashuvlari (faqat ota-ona)" },
   { command: 'help', description: 'Yordam' },
 ];
 
@@ -224,6 +253,8 @@ function helpText() {
   const custom = store.all('bot_commands');
   const lines = [
     "📋 Mavjud buyruqlar:",
+    "",
+    "🎓 O'quvchi:",
     "🪙 /balance — coin va ball balansi",
     "📅 /schedule — dars jadvali",
     "💳 /payments — to'lovlar tarixi",
@@ -232,10 +263,29 @@ function helpText() {
     "📚 /homework — uy vazifalari va baholar",
     "📝 /exams — imtihon natijalari",
     "🏆 /certificates — sertifikatlar",
-    "📢 /announcements — so'nggi e'lonlar",
-    "📊 /finance — qarzdorlar va oylik tushum (faqat moliya/rahbariyat xodimlari)",
-    "📣 /announce Guruh nomi | Xabar — guruhga e'lon (faqat rahbariyat)",
-    "📢 /broadcast Xabar — hamma ulangan hisobga xabar (faqat rahbariyat)",
+    "",
+    "👨‍👩‍👧 Ota-ona:",
+    "👤 /child — farzandim ma'lumotlari",
+    "🪙 /childbalance — farzandim balansi",
+    "📋 /childattendance — farzandim davomati",
+    "📝 /childexams — farzandim imtihon natijalari",
+    "📚 /childhomework — farzandim uy vazifalari",
+    "💳 /childpayments — farzandim to'lovlari",
+    "📅 /meetings — ota-ona uchrashuvlari",
+    "",
+    "👨‍🏫 O'qituvchi:",
+    "👥 /mygroups — guruhlarim",
+    "🎓 /mystudents — o'quvchilarim soni",
+    "📊 /kpi — KPI ko'rsatkichim",
+    "",
+    "🏛 Rahbariyat/moliya:",
+    "📊 /finance — qarzdorlar va oylik tushum",
+    "📈 /stats — umumiy statistika",
+    "🎫 /tickets — ochiq tiketlar",
+    "📣 /announce Guruh nomi | Xabar — guruhga e'lon",
+    "📢 /broadcast Xabar — hamma ulangan hisobga xabar",
+    "",
+    "📢 /announcements — so'nggi e'lonlar (hammaga)",
     "ℹ️ /help — shu yordam matni",
   ];
   for (const c of custom) lines.push(`/${c.command} — ${c.description || ''}`.trimEnd());
@@ -262,6 +312,20 @@ export async function refreshBotCommands() {
       body: JSON.stringify({ commands: [...BUILTIN_COMMANDS, ...custom] }),
     });
   } catch { /* jim o'tkaziladi */ }
+}
+
+function normalizePhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length === 9 ? '998' + digits : digits;
+}
+
+// Ota-ona hisobiga bog'langan farzand(lar) — parentDashboard.js'dagi bilan bir xil mantiq
+// (telefon raqami orqali), faqat bu yerda `link.user_id` orqali `users` jadvalidan telefon olinadi.
+function myChildren(link) {
+  const user = store.get('users', link.user_id);
+  if (!user) return [];
+  const myPhone = normalizePhone(user.phone);
+  return store.all('students').filter((s) => normalizePhone(s.parent_phone) === myPhone);
 }
 
 // Bitta buyruqqa (masalan "balance", "schedule") javob matnini tayyorlaydi — private chatda ham,
@@ -336,6 +400,107 @@ function commandReply(cmdName, link) {
     const lines = items.map((a) => `📢 ${a.title || '—'} — ${a.date || ''}\n${a.body || ''}`);
     return `📢 So'nggi e'lonlar:\n\n${lines.join('\n\n')}`;
   }
+  // ── Ota-ona buyruqlari — farzand(lar) telefon raqami orqali topiladi ──
+  if (cmdName === 'child') {
+    const kids = myChildren(link);
+    if (!kids.length) return "Farzandingiz tizimda topilmadi. Telefon raqamingiz tizimdagi ma'lumot bilan mos kelishiga ishonch hosil qiling.";
+    return `👨‍👩‍👧 Farzandlaringiz:\n\n${kids.map((s) => `🎓 ${s.full_name}\n👥 Guruh: ${s.group_name || '—'}\n👨‍🏫 O'qituvchi: ${s.teacher || '—'}\n📊 Daraja: ${s.level || '—'}`).join('\n\n')}`;
+  }
+  if (cmdName === 'childbalance') {
+    const kids = myChildren(link);
+    if (!kids.length) return "Farzandingiz tizimda topilmadi.";
+    return `🪙 Farzandlaringiz balansi:\n\n${kids.map((s) => `${s.full_name}: 🪙 ${s.coins ?? 0} coin, ⭐ ${s.points ?? 0} ball`).join('\n')}`;
+  }
+  if (cmdName === 'childattendance') {
+    const kids = myChildren(link);
+    if (!kids.length) return "Farzandingiz tizimda topilmadi.";
+    const blocks = kids.map((s) => {
+      const records = store.where('student_attendance_daily', (a) => String(a.student_id) === String(s.id))
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5);
+      if (!records.length) return `${s.full_name}: davomat tarixi yo'q`;
+      const lines = records.map((r) => { const st = ATTENDANCE_STATUS[r.status] || { emoji: '•', label: r.status }; return `  ${st.emoji} ${r.date} — ${st.label}`; });
+      return `👤 ${s.full_name}:\n${lines.join('\n')}`;
+    });
+    return `📋 Farzandlaringiz davomati:\n\n${blocks.join('\n\n')}`;
+  }
+  if (cmdName === 'childexams') {
+    const kids = myChildren(link);
+    if (!kids.length) return "Farzandingiz tizimda topilmadi.";
+    const blocks = kids.map((s) => {
+      const results = store.all('exam_results').filter((e) => e.student === s.full_name)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 3);
+      if (!results.length) return `${s.full_name}: imtihon natijasi yo'q`;
+      return `👤 ${s.full_name}:\n${results.map((e) => `  📝 ${e.exam || '—'} — ${e.score ?? '—'} ball (${e.date || ''})`).join('\n')}`;
+    });
+    return `🎓 Farzandlaringiz imtihon natijalari:\n\n${blocks.join('\n\n')}`;
+  }
+  if (cmdName === 'childhomework') {
+    const kids = myChildren(link);
+    if (!kids.length) return "Farzandingiz tizimda topilmadi.";
+    const blocks = kids.map((s) => {
+      const reviews = store.all('homework_reviews').filter((h) => h.student === s.full_name)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 3);
+      if (!reviews.length) return `${s.full_name}: baholangan uy vazifasi yo'q`;
+      return `👤 ${s.full_name}:\n${reviews.map((h) => `  📝 ${h.homework || '—'} — baho: ${h.score ?? '—'}`).join('\n')}`;
+    });
+    return `📚 Farzandlaringiz uy vazifalari:\n\n${blocks.join('\n\n')}`;
+  }
+  if (cmdName === 'childpayments') {
+    const kids = myChildren(link);
+    if (!kids.length) return "Farzandingiz tizimda topilmadi.";
+    const blocks = kids.map((s) => {
+      const pays = store.all('payments').filter((p) => p.student === s.full_name)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 3);
+      if (!pays.length) return `${s.full_name}: to'lov tarixi yo'q`;
+      return `👤 ${s.full_name}:\n${pays.map((p) => `  ${p.date || 'kutilmoqda'} — ${fmtMoney(p.amount)} so'm (${p.status === 'paid' ? "to'landi" : 'kutilmoqda'})`).join('\n')}`;
+    });
+    return `💳 Farzandlaringiz to'lovlari:\n\n${blocks.join('\n\n')}`;
+  }
+  if (cmdName === 'meetings') {
+    const rows = store.all('parent_meetings').filter((m) => m.parent_name === link.user_name)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5);
+    if (!rows.length) return "Rejalashtirilgan uchrashuv yo'q.";
+    return `📅 Uchrashuvlaringiz:\n\n${rows.map((m) => `${m.date || '—'} ${m.time || ''} — ${m.purpose || 'Uchrashuv'} (${m.status || 'scheduled'})`).join('\n')}`;
+  }
+
+  // ── O'qituvchi buyruqlari ──
+  if (cmdName === 'mygroups') {
+    const groups = store.all('groups').filter((g) => g.teacher === link.user_name);
+    if (!groups.length) return "Sizga biriktirilgan guruh topilmadi.";
+    return `👥 Guruhlaringiz:\n\n${groups.map((g) => `📌 ${g.name}\n🕐 ${g.days || '—'} · 🏫 ${g.room || '—'}\n👤 ${g.students_count ?? 0} o'quvchi`).join('\n\n')}`;
+  }
+  if (cmdName === 'mystudents') {
+    const groups = store.all('groups').filter((g) => g.teacher === link.user_name).map((g) => g.name);
+    const students = store.all('students').filter((s) => groups.includes(s.group_name));
+    if (!students.length) return "O'quvchilaringiz topilmadi.";
+    return `🎓 Jami o'quvchilaringiz: ${students.length} ta\n\n${groups.map((g) => `• ${g}: ${students.filter((s) => s.group_name === g).length} ta`).join('\n')}`;
+  }
+  if (cmdName === 'kpi') {
+    const rows = store.all('teacher_kpi').filter((k) => k.teacher === link.user_name)
+      .sort((a, b) => (b.period || '').localeCompare(a.period || '')).slice(0, 3);
+    if (!rows.length) return "KPI ma'lumoti hali kiritilmagan.";
+    return `📊 Sizning KPI ko'rsatkichlaringiz:\n\n${rows.map((k) => `${k.period || '—'}: ${k.score ?? '—'} ball`).join('\n')}`;
+  }
+
+  // ── Rahbariyat/admin buyruqlari ──
+  if (cmdName === 'stats') {
+    if (!FINANCE_ROLES.includes(link.role)) return "Bu buyruq faqat moliya/rahbariyat xodimlari uchun ishlaydi.";
+    const students = store.all('students');
+    const active = students.filter((s) => s.status === 'active' || !s.status);
+    const unpaid = students.filter((s) => !s.paid);
+    const openTickets = store.all('tickets').filter((t) => !['resolved', 'closed'].includes(t.status));
+    const today = new Date().toISOString().slice(0, 10);
+    const todayAttendance = store.all('student_attendance_daily').filter((a) => a.date === today);
+    return `📊 UMUMIY STATISTIKA\n\n👥 Jami o'quvchilar: ${students.length} ta (${active.length} faol)\n⚠️ Qarzdorlar: ${unpaid.length} ta\n🎫 Ochiq tiketlar: ${openTickets.length} ta\n📋 Bugungi davomat belgilangan: ${todayAttendance.length} ta`;
+  }
+  if (cmdName === 'tickets') {
+    if (!FINANCE_ROLES.includes(link.role)) return "Bu buyruq faqat moliya/rahbariyat xodimlari uchun ishlaydi.";
+    const open = store.all('tickets').filter((t) => !['resolved', 'closed'].includes(t.status))
+      .sort((a, b) => (a.date || '').localeCompare(b.date || '')).slice(0, 8);
+    if (!open.length) return "Ochiq tiket yo'q ✅";
+    return `🎫 Ochiq tiketlar (${open.length} ta):\n\n${open.map((t) => `${t.priority === 'yuqori' ? '🔴' : '⚪'} ${t.title} — ${t.assigned_to || "mas'ul yo'q"}`).join('\n')}`;
+  }
+
   if (cmdName === 'help') return helpText();
   if (cmdName === 'finance') return financeReport(link);
   const custom = store.all('bot_commands').find((c) => c.command === cmdName);
@@ -344,6 +509,7 @@ function commandReply(cmdName, link) {
 }
 
 const FINANCE_ROLES = ['founder', 'director', 'super_admin', 'branch_manager', 'admin', 'academic_manager', 'accountant', 'cashier'];
+const TEACHER_ROLES = ['head_teacher', 'senior_teacher', 'teacher', 'assistant_teacher', 'mentor', 'methodologist'];
 // Faqat shaxsiy chatda ishlaydigan, argumentli xodim buyruqlari (/broadcast, /announce) uchun ruxsat ro'yxatlari.
 const BROADCAST_ROLES = ['founder', 'director', 'super_admin'];
 const ANNOUNCE_ROLES = ['founder', 'director', 'super_admin', 'branch_manager', 'admin', 'academic_manager'];
