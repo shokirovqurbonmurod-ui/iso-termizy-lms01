@@ -23,18 +23,20 @@ export default function TabbedPage({ item }) {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-6 border-b border-navy-100 pb-3">
-        {visibleTabs.map((t) => {
-          const isActive = current?.key === t.key;
-          return (
-            <button key={t.key} onClick={() => setActive(t.key)}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition ${
-                isActive ? 'bg-gradient-to-r from-gold-400 to-gold-500 text-white shadow' : 'text-navy-500 hover:bg-navy-50'}`}>
-              <span className="text-sm leading-none">{emojiForItem(t, item.group)}</span> {t.label}
-            </button>
-          );
-        })}
-      </div>
+      {visibleTabs.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 mb-6 border-b border-navy-100 pb-3">
+          {visibleTabs.map((t) => {
+            const isActive = current?.key === t.key;
+            return (
+              <button key={t.key} onClick={() => setActive(t.key)}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition ${
+                  isActive ? 'bg-gradient-to-r from-gold-400 to-gold-500 text-white shadow' : 'text-navy-500 hover:bg-navy-50'}`}>
+                <span className="text-sm leading-none">{emojiForItem(t, item.group)}</span> {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {current && renderKind(current, current.key)}
     </div>
   );

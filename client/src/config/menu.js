@@ -19,6 +19,9 @@ import { isAdmin, ROLES } from './roles.js';
 const ADMIN_ONLY = [];
 // Texnik/tizim (IT) bandlari — o'quvchi va ota-ona panelida ko'rinmasin, xodimlarga (admin, o'qituvchi va h.k.) ko'rinsin.
 const STAFF_ONLY = ROLES.filter((r) => !['student', 'parent', 'guest'].includes(r));
+// O'quvchiga Chat & Xabarlar bo'limida faqat chatning o'zi ko'rinsin — boshqarish/statistika
+// sub-tablari (Aloqa paneli, Ichki xabarlar) chalg'itmasin degan aniq so'rov bo'yicha.
+const NON_STUDENT = ROLES.filter((r) => r !== 'student');
 
 // roles: array of role keys allowed. `null` = everyone.
 // kind: how the route renders. resource → generic CRUD table (see resources.js).
@@ -201,11 +204,11 @@ export const MENU = [
     group: 'Aloqa & Gamifikatsiya',
     items: [
       { key: 'chat-messages', label: 'Chat & Xabarlar', icon: MessageCircle, kind: 'tabs', roles: null, tabs: [
-        { key: 'comm-dashboard', label: 'Aloqa paneli', icon: LayoutDashboard, kind: 'communicationdashboard', roles: null },
+        { key: 'comm-dashboard', label: 'Aloqa paneli', icon: LayoutDashboard, kind: 'communicationdashboard', roles: STAFF_ONLY },
         { key: 'group-chat', label: 'Guruh chat', icon: MessageCircle, kind: 'chat', roles: null },
-        { key: 'internal-chat', label: 'Ichki xabarlar', icon: Send, kind: 'chat', roles: null },
+        { key: 'internal-chat', label: 'Ichki xabarlar', icon: Send, kind: 'chat', roles: STAFF_ONLY },
         { key: 'xabar-yuborish', label: 'Xabar yuborish', icon: Send, kind: 'messagespage', roles: ['director','super_admin','admin','marketing','smm'] },
-        { key: 'announcement-center', label: "E'lon markazi", icon: Megaphone, kind: 'announcementcenter', roles: null },
+        { key: 'announcement-center', label: "E'lon markazi", icon: Megaphone, kind: 'announcementcenter', roles: NON_STUDENT },
       ] },
       { key: 'bot', label: 'Telegram Bot', icon: Bot, kind: 'bot', roles: null },
       { key: 'media-center', label: 'Media markazi', icon: Video, kind: 'tabs', roles: null, tabs: [
