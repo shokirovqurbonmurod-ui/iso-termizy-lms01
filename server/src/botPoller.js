@@ -63,6 +63,27 @@ export async function sendMessage(chatId, text, messageThreadId, replyMarkup) {
   } catch (e) { console.error('Bot sendMessage xatosi:', e.message); }
 }
 
+// /start kod bilan yozilmasa — kimligini so'rab, shu rolga mos "kodni qayerdan olish" yo'riqnomasini
+// ko'rsatish uchun. DIQQAT: bu shunchaki matn tanlash, hisobni ULAYDIGAN yagona yo'l hamon
+// tizimdan olingan tasdiqlangan kod (/start 123456) — foydalanuvchi bu yerda rol "tanlab" hech
+// qanday huquq ololmaydi, faqat unga mos yo'riqnoma matnini ko'radi.
+const ONBOARD_ROLES = [
+  { key: 'student', label: "🎓 O'quvchi", desc: "coin balans, dars jadvali, uy vazifa, davomat, imtihon natijalari" },
+  { key: 'teacher', label: "👨‍🏫 O'qituvchi", desc: "guruh yangiliklari, e'lonlar, ota-onalar bilan aloqa" },
+  { key: 'admin', label: '🧑‍💼 Xodim / Admin', desc: "e'lon yuborish, hisobotlar, tizim bildirishnomalari" },
+  { key: 'director', label: '🏛 Direktor / Rahbariyat', desc: "moliya hisobot, statistika, umumiy xabar yuborish (/broadcast)" },
+];
+
+function onboardKeyboard() {
+  return { inline_keyboard: ONBOARD_ROLES.map((r) => [{ text: r.label, callback_data: `onboard:${r.key}` }]) };
+}
+
+function onboardInstructions(roleKey) {
+  const r = ONBOARD_ROLES.find((x) => x.key === roleKey);
+  if (!r) return null;
+  return `${r.label} sifatida ulanish:\n\n1️⃣ Tizimga o'z login/parolingiz bilan kiring\n2️⃣ "Bot" sahifasini oching\n3️⃣ "Kod olish" tugmasini bosing (10 daqiqa amal qiladi)\n4️⃣ Shu yerga yuboring:\n👉 /start 123456\n\nUlangach sizga: ${r.desc}.`;
+}
+
 // Zamonaviy asosiy menyu — bitta tekis ekranda bosiladigan tugmalar (bo'lim/submenu yo'q, foydalanuvchi
 // so'rovi bo'yicha). "mini_app_url" sozlangan bo'lsa Mini App tugmasi ham qo'shiladi (web_app tugmasi
 // faqat shaxsiy chatda ishlaydi, shuning uchun bu funksiya guruhda chaqirilmaydi).
@@ -459,7 +480,7 @@ async function handleMessage(msg) {
   if (text.startsWith('/start')) {
     const code = text.split(/\s+/)[1];
     if (!code) {
-      return sendMessage(chatId, "🏛 ISO TERMIZY AVLODLARI\n━━━━━━━━━━━━━━━━━━\n\nAssalomu alaykum va botimizga xush kelibsiz! 🎉\n\nHisobingizni ulash uchun tizimdagi \"Bot\" sahifasidan 6 xonali kod oling, so'ng shu yerga shunday yuboring:\n\n👉 /start 123456\n\nUlangach — coin balansi, dars jadvali, to'lovlar, davomat, imtihon natijalari va boshqa ko'p narsani shu yerdan bir zumda ko'rasiz. 🚀", null, mainMenuKeyboard());
+      return sendMessage(chatId, "🏛 ISO TERMIZY AVLODLARI\n━━━━━━━━━━━━━━━━━━\n\nAssalomu alaykum va botimizga xush kelibsiz! 🎉\n\nAvval, siz kim ekaningizni tanlang — shunga mos yo'riqnoma ko'rsataman:", null, onboardKeyboard());
     }
     const pending = takePendingCode(code);
     if (!pending) {
@@ -543,6 +564,13 @@ async function handleCallbackQuery(cq) {
   const chatId = cq.message?.chat?.id;
   if (!chatId) return;
   const messageThreadId = cq.message?.message_thread_id;
+
+  // Rol tanlash — hisob hali ulanmagan bo'lsa ham ishlaydi, chunki bu shunchaki yo'riqnoma matni.
+  if (cq.data?.startsWith('onboard:')) {
+    const instructions = onboardInstructions(cq.data.slice(8));
+    return sendMessage(chatId, instructions || "Noma'lum tanlov.", messageThreadId);
+  }
+
   const link = cq.from?.id ? store.where('telegram_links', (l) => Number(l.chat_id) === cq.from.id)[0] : null;
   if (!link) return sendMessage(chatId, "Hisobingiz ulanmagan. Shaxsiy chatda /start yozib ulang.", messageThreadId);
   const reply = commandReply(cq.data, link);
