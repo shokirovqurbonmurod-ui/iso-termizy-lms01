@@ -37,6 +37,20 @@ function takePendingCode(code) {
   return pending;
 }
 
+// Menyudagi "📢 Xabar yuborish" / "📣 Guruhga e'lon" tugmasi bosilganda — keyingi oddiy (buyruqsiz)
+// xabarni o'sha amalning matni sifatida qabul qilish uchun 5 daqiqalik "kutish" holati saqlanadi.
+function setPendingAction(chatId, action) {
+  for (const p of store.where('bot_pending_actions', (p2) => p2.chat_id === chatId)) store.remove('bot_pending_actions', p.id);
+  store.insert('bot_pending_actions', { chat_id: chatId, action, expires: Date.now() + 5 * 60 * 1000 });
+}
+function takePendingAction(chatId) {
+  const t = Date.now();
+  for (const p of store.all('bot_pending_actions')) if (p.expires < t) store.remove('bot_pending_actions', p.id);
+  const pending = store.where('bot_pending_actions', (p) => p.chat_id === chatId)[0];
+  if (pending) store.remove('bot_pending_actions', pending.id);
+  return pending;
+}
+
 export async function sendMessage(chatId, text, messageThreadId, replyMarkup) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return;
@@ -92,18 +106,27 @@ function onboardInstructions(roleKey) {
 // (commandReply ichida student() orqali tekshiriladi), boshqa rolga shu tugmalarni ko'rsatish
 // faqat "bu buyruq faqat o'quvchilar uchun" xatosiga olib kelardi.
 function mainMenuKeyboard(role) {
-  const rows = role === 'student' ? [
-    [{ text: '🪙 Balans', callback_data: 'balance' }, { text: '📅 Jadval', callback_data: 'schedule' }],
-    [{ text: "💳 To'lovlar", callback_data: 'payments' }, { text: '👥 Guruh', callback_data: 'group' }],
-    [{ text: '📋 Davomat', callback_data: 'attendance' }, { text: '📚 Uy vazifa', callback_data: 'homework' }],
-    [{ text: '📝 Imtihonlar', callback_data: 'exams' }, { text: '🏆 Sertifikatlar', callback_data: 'certificates' }],
-    [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }],
-  ] : FINANCE_ROLES.includes(role) ? [
-    [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: '📊 Moliya', callback_data: 'finance' }],
-    [{ text: 'ℹ️ Yordam', callback_data: 'help' }],
-  ] : [
-    [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }],
-  ];
+  let rows;
+  if (role === 'student') {
+    rows = [
+      [{ text: '🪙 Balans', callback_data: 'balance' }, { text: '📅 Jadval', callback_data: 'schedule' }],
+      [{ text: "💳 To'lovlar", callback_data: 'payments' }, { text: '👥 Guruh', callback_data: 'group' }],
+      [{ text: '📋 Davomat', callback_data: 'attendance' }, { text: '📚 Uy vazifa', callback_data: 'homework' }],
+      [{ text: '📝 Imtihonlar', callback_data: 'exams' }, { text: '🏆 Sertifikatlar', callback_data: 'certificates' }],
+      [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }],
+    ];
+  } else if (FINANCE_ROLES.includes(role)) {
+    rows = [[{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: '📊 Moliya', callback_data: 'finance' }]];
+    // Rahbariyat/akademik boshqaruv uchun qo'shimcha amal tugmalari — bosilganda bot keyingi
+    // yozilgan matnni o'sha amalning mazmuni sifatida kutadi (setPendingAction/takePendingAction).
+    const adminRow = [];
+    if (BROADCAST_ROLES.includes(role)) adminRow.push({ text: '📢 Xabar yuborish', callback_data: 'menu:broadcast' });
+    if (ANNOUNCE_ROLES.includes(role)) adminRow.push({ text: "📣 Guruhga e'lon", callback_data: 'menu:announce' });
+    if (adminRow.length) rows.push(adminRow);
+    rows.push([{ text: 'ℹ️ Yordam', callback_data: 'help' }]);
+  } else {
+    rows = [[{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }]];
+  }
   const url = getBotSettings()?.mini_app_url;
   if (url) rows.push([{ text: '📱 Ilovani ochish', web_app: { url } }]);
   return { inline_keyboard: rows };
@@ -479,6 +502,17 @@ async function handleGroupMessage(msg) {
   // Boshqa guruh xabarlariga javob bermaymiz — spam bo'lmasin.
 }
 
+async function runBroadcast(body) {
+  const links = store.all('telegram_links');
+  await Promise.all(links.map((l) => sendMessage(l.chat_id, `📢 ${body}`).catch(() => {})));
+  return `✅ Xabar ${links.length} ta ulangan hisobga yuborildi.`;
+}
+
+async function runAnnounce(groupName, body) {
+  await notifyGroupTopic(groupName, `📢 ${body}`);
+  return `✅ "${groupName}" guruhiga e'lon yuborildi.`;
+}
+
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const text = (msg.text || '').trim();
@@ -513,6 +547,28 @@ async function handleMessage(msg) {
     return sendMessage(chatId, "Hisobingiz hali ulanmagan. Tizimdagi \"Bot\" sahifasidan kod olib, /start 123456 shaklida yuboring.");
   }
 
+  // Menyudan "📢 Xabar yuborish" / "📣 Guruhga e'lon" bosilgan bo'lsa — shu oddiy (buyruqsiz)
+  // xabarning o'zi o'sha amalning matni hisoblanadi (slash buyruq yozish shart emas).
+  if (!text.startsWith('/')) {
+    const pendingAction = takePendingAction(chatId);
+    if (pendingAction?.action === 'broadcast') {
+      if (!BROADCAST_ROLES.includes(link.role)) return sendMessage(chatId, "Bu amal faqat rahbariyat uchun.");
+      reactTo(chatId, msg.message_id, REACTIONS.ok);
+      return sendMessage(chatId, await runBroadcast(text), null, mainMenuKeyboard(link.role));
+    }
+    if (pendingAction?.action === 'announce') {
+      if (!ANNOUNCE_ROLES.includes(link.role)) return sendMessage(chatId, "Bu amal faqat rahbariyat/akademik boshqaruv uchun.");
+      const sep = text.indexOf('|');
+      const groupName = (sep === -1 ? '' : text.slice(0, sep)).trim();
+      const body = (sep === -1 ? text : text.slice(sep + 1)).trim();
+      if (!groupName || sep === -1) {
+        return sendMessage(chatId, "Format: Guruh nomi | Xabar matni\n\nMisol:\nJunior 11 | Ertaga dars 15:00 ga ko'chirildi.\n\nQaytadan urinib ko'ring — yana \"📣 Guruhga e'lon\" tugmasini bosing.");
+      }
+      reactTo(chatId, msg.message_id, REACTIONS.ok);
+      return sendMessage(chatId, await runAnnounce(groupName, body), null, mainMenuKeyboard(link.role));
+    }
+  }
+
   // /broadcast <matn> — faqat rahbariyat: barcha ulangan hisoblarga birdaniga xabar (tizimdagi
   // "Bot" sahifasidagi ommaviy xabar bilan bir xil, lekin botdan chiqmasdan tez yuboriladi).
   if (text.startsWith('/broadcast')) {
@@ -521,12 +577,11 @@ async function handleMessage(msg) {
     }
     const body = text.replace(/^\/broadcast(@\S+)?/i, '').trim();
     if (!body) {
-      return sendMessage(chatId, "Foydalanish:\n/broadcast Xabar matni\n\nMisol:\n/broadcast Ertaga bayram munosabati bilan darslar bo'lmaydi.");
+      setPendingAction(chatId, 'broadcast');
+      return sendMessage(chatId, "Xabar matnini yozing (keyingi xabaringiz hammaga yuboriladi):\n\nYoki to'g'ridan-to'g'ri:\n/broadcast Xabar matni");
     }
-    const links = store.all('telegram_links');
-    await Promise.all(links.map((l) => sendMessage(l.chat_id, `📢 ${body}`).catch(() => {})));
     reactTo(chatId, msg.message_id, REACTIONS.ok);
-    return sendMessage(chatId, `✅ Xabar ${links.length} ta ulangan hisobga yuborildi.`);
+    return sendMessage(chatId, await runBroadcast(body));
   }
 
   // /announce Guruh nomi | Xabar matni — guruhning Telegram topic'iga (yoki umumiy davomat
@@ -540,11 +595,11 @@ async function handleMessage(msg) {
     const groupName = (sep === -1 ? '' : raw.slice(0, sep)).trim();
     const body = (sep === -1 ? '' : raw.slice(sep + 1)).trim();
     if (!groupName || !body) {
-      return sendMessage(chatId, "Foydalanish:\n/announce Guruh nomi | Xabar matni\n\nMisol:\n/announce Junior 11 | Ertaga dars 15:00 ga ko'chirildi.");
+      setPendingAction(chatId, 'announce');
+      return sendMessage(chatId, "Format: Guruh nomi | Xabar matni\n\nMisol:\nJunior 11 | Ertaga dars 15:00 ga ko'chirildi.\n\nYoki to'g'ridan-to'g'ri:\n/announce Guruh nomi | Xabar matni");
     }
-    await notifyGroupTopic(groupName, `📢 ${body}`);
     reactTo(chatId, msg.message_id, REACTIONS.ok);
-    return sendMessage(chatId, `✅ "${groupName}" guruhiga e'lon yuborildi.`);
+    return sendMessage(chatId, await runAnnounce(groupName, body));
   }
 
   sendChatAction(chatId, 'typing');
@@ -581,6 +636,18 @@ async function handleCallbackQuery(cq) {
 
   const link = cq.from?.id ? store.where('telegram_links', (l) => Number(l.chat_id) === cq.from.id)[0] : null;
   if (!link) return sendMessage(chatId, "Hisobingiz ulanmagan. Shaxsiy chatda /start yozib ulang.", messageThreadId);
+
+  if (cq.data === 'menu:broadcast') {
+    if (!BROADCAST_ROLES.includes(link.role)) return sendMessage(chatId, "Bu amal faqat rahbariyat uchun.", messageThreadId);
+    setPendingAction(chatId, 'broadcast');
+    return sendMessage(chatId, "Xabar matnini yozing — keyingi xabaringiz barcha ulangan hisoblarga yuboriladi:");
+  }
+  if (cq.data === 'menu:announce') {
+    if (!ANNOUNCE_ROLES.includes(link.role)) return sendMessage(chatId, "Bu amal faqat rahbariyat/akademik boshqaruv uchun.", messageThreadId);
+    setPendingAction(chatId, 'announce');
+    return sendMessage(chatId, "Format: Guruh nomi | Xabar matni\n\nMisol:\nJunior 11 | Ertaga dars 15:00 ga ko'chirildi.");
+  }
+
   const reply = commandReply(cq.data, link);
   if (reply) return sendMessage(chatId, reply, messageThreadId, cq.data === 'help' ? mainMenuKeyboard(link.role) : undefined);
 }
