@@ -6,6 +6,8 @@ import { Spinner, Modal } from '../components/ui.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useCall } from '../hooks/useCall.js';
 import CallOverlay from '../components/CallOverlay.jsx';
+import { useGroupCall } from '../hooks/useGroupCall.js';
+import GroupCallPanel from '../components/GroupCallPanel.jsx';
 
 const TABS = [
   { key: 'channels', icon: Hash, label: 'Kanallar' },
@@ -249,6 +251,22 @@ export default function GroupChat() {
     && customGroupRoom?.created_by !== user.full_name
     && (groups.some(g => g.name === channel) || !!customGroupRoom);
   const currentInviteCode = groups.find(g => g.name === channel)?.invite_code || customGroupRoom?.invite_code;
+
+  // Guruh egasi (yaratuvchi) yoki u tayinlagan "guruh admin"i — shu guruh doirasida xabar
+  // o'chirish/a'zolarni boshqarish huquqiga ega, lekin butun tizim admini emas.
+  const isRoomOwner = !!customGroupRoom && customGroupRoom.created_by === user.full_name;
+  const isRoomAdmin = isRoomOwner || (Array.isArray(customGroupRoom?.admins) && customGroupRoom.admins.includes(user.full_name));
+  const canModerate = isAdmin || isRoomAdmin;
+
+  async function toggleRoomAdmin(name) {
+    if (!customGroupRoom) return;
+    const currentlyAdmin = Array.isArray(customGroupRoom.admins) && customGroupRoom.admins.includes(name);
+    try {
+      if (currentlyAdmin) await api.del(`/chat_rooms/${customGroupRoom.id}/admins/${encodeURIComponent(name)}`);
+      else await api.post(`/chat_rooms/${customGroupRoom.id}/admins`, { user_name: name });
+      await load();
+    } catch (e) { alert(e.message); }
+  }
 
   async function joinGroup() {
     setJoinErr(''); setJoining(true);
@@ -530,6 +548,8 @@ export default function GroupChat() {
   // Qo'ng'iroq faqat shaxsiy (bot bo'lmagan) suhbatlarda mumkin.
   const callPeerName = (tab === 'private' && !isBotChannel && channel.startsWith('DM:')) ? displayChannel : null;
   const call = useCall({ channel, peerName: callPeerName, myName: user.full_name, enabled: !!callPeerName });
+  const groupCallEnabled = (tab === 'channels' || tab === 'groups') && !isLocked;
+  const groupCall = useGroupCall({ channel, myName: user.full_name, enabled: groupCallEnabled });
 
   const msgCount = ch => (messages || []).filter(m => m.channel === ch).length;
 
@@ -708,11 +728,18 @@ export default function GroupChat() {
                 </button>
               </>
             )}
+            {groupCallEnabled && !groupCall.inCall && (
+              <button onClick={() => groupCall.join('audio')} className="chip bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shrink-0" title="Guruh audio/video chat">
+                <Phone size={11} className="inline -mt-0.5 mr-1" /> Video chat{groupCall.remoteCount > 0 ? ` (${groupCall.remoteCount})` : ''}
+              </button>
+            )}
             <button onClick={() => setShowMembers(!showMembers)} className="grid place-items-center w-8 h-8 rounded-lg hover:bg-navy-50 text-navy-400 transition" title="A'zolar">
               <UserPlus size={16} />
             </button>
             {isAdmin && <span className="chip bg-gold/10 text-gold-700 text-[9px]">Moderator</span>}
           </div>
+
+          {groupCallEnabled && <GroupCallPanel call={groupCall} myName={user.full_name} />}
 
           {pinnedOpen && pinnedInChannel.length > 0 && (
             <div className="border-b border-navy-100 bg-amber-50/60 max-h-32 overflow-y-auto">
