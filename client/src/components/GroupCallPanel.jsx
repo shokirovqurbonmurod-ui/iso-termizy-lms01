@@ -51,6 +51,9 @@ export default function GroupCallPanel({ call, myName }) {
         <Tile name="Siz" stream={localStream} muted />
         {names.map((n) => <Tile key={n} name={n} stream={participants[n]} />)}
       </div>
+      {names.length === 0 && (
+        <p className="text-center text-[11px] text-white/50 mb-2">Kutilmoqda — hali hech kim qo'shilmadi...</p>
+      )}
       <div className="flex items-center justify-center gap-2">
         <button onClick={toggleMute} className={`grid place-items-center w-9 h-9 rounded-full transition ${muted ? 'bg-white text-navy-900' : 'bg-white/15 text-white hover:bg-white/25'}`}>
           {muted ? <MicOff size={15} /> : <Mic size={15} />}

@@ -375,4 +375,67 @@ r.post('/feature-requests/vote', (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// Chat Premium — Telegram Premiumga o'xshash obuna: 👑 belgi, kattaroq fayl yuklash limiti.
+// Narx/muddat har bir tarif uchun serverda qat'iy belgilangan — mijoz faqat tarif nomini tanlaydi,
+// narxni o'zi yubora olmaydi (aks holda konsolda so'rovni o'zgartirib arzon sotib olishi mumkin edi).
+const CHAT_PREMIUM_PLANS = {
+  '1m': { months: 1, days: 30, coins: 300 },
+  '3m': { months: 3, days: 90, coins: 800 },
+  '6m': { months: 6, days: 180, coins: 1500 },
+  '12m': { months: 12, days: 365, coins: 2700 },
+};
+
+r.get('/chat-premium/plans', (_req, res) => res.json(CHAT_PREMIUM_PLANS));
+
+// Promo kod topib beradi — amal qilishi (holat/muddat/limit) va shu talaba oldin ishlatmaganini
+// tekshiradi. Xato bo'lsa matn qaytaradi, to'g'ri bo'lsa promo qatorining o'zini.
+function findValidPromo(code, studentName, context) {
+  const clean = String(code || '').trim().toUpperCase();
+  if (!clean) return { error: 'Promo kod kiritilmagan.' };
+  const promo = store.all('promo_codes').find((p) => String(p.code || '').toUpperCase() === clean);
+  if (!promo) return { error: "Bunday promo kod topilmadi." };
+  if (promo.status && promo.status !== 'active') return { error: "Bu promo kod faol emas." };
+  if (promo.expires && promo.expires < today()) return { error: "Promo kodning muddati o'tgan." };
+  if (promo.max_uses && Number(promo.used || 0) >= Number(promo.max_uses)) return { error: "Promo kod limiti tugagan." };
+  const already = store.where('promo_code_redemptions', (r2) => r2.code === clean && r2.student === studentName && r2.context === context)[0];
+  if (already) return { error: "Siz bu promo koddan allaqachon foydalangansiz." };
+  return { promo, clean };
+}
+
+function redeemPromo(promo, clean, studentName, context) {
+  store.update('promo_codes', promo.id, { used: (Number(promo.used) || 0) + 1 });
+  store.insert('promo_code_redemptions', { code: clean, student: studentName, context, at: now() });
+}
+
+r.post('/chat-premium/buy', (req, res) => {
+  const student = myStudent(req);
+  if (!student) return res.status(403).json({ error: "Bu buyruq faqat o'quvchi hisobi uchun ishlaydi." });
+  const planKey = req.body?.plan;
+  const plan = CHAT_PREMIUM_PLANS[planKey];
+  if (!plan) return res.status(400).json({ error: "Tarif tanlanmagan" });
+  const active = store.where('chat_premium', (p) => p.student === student.full_name && p.expires_at > now());
+  if (active.length) return res.status(409).json({ error: 'Sizda allaqachon faol Chat Premium bor.' });
+
+  let cost = plan.coins;
+  let promoInfo = null;
+  const promoCode = req.body?.promo_code;
+  if (promoCode) {
+    const { promo, clean, error } = findValidPromo(promoCode, student.full_name, 'chat_premium');
+    if (error) return res.status(400).json({ error });
+    cost = 0;
+    promoInfo = { promo, clean };
+  }
+
+  if (cost > 0 && (Number(student.coins) || 0) < cost) return res.status(400).json({ error: 'Coin yetarli emas.' });
+  const balance = cost > 0 ? debitCoins(student, cost, `Chat Premium (${plan.months} oy)`) : (Number(student.coins) || 0);
+  const expires = new Date(Date.now() + plan.days * oneDayMs).toISOString().slice(0, 19).replace('T', ' ');
+  const row = store.insert('chat_premium', {
+    student: student.full_name, purchased_at: now(), expires_at: expires, cost_coins: cost, plan: planKey,
+    promo_code: promoInfo?.clean || '',
+  });
+  if (promoInfo) redeemPromo(promoInfo.promo, promoInfo.clean, student.full_name, 'chat_premium');
+  logAudit(student.full_name, 'chat premium buy', `${plan.months} oy${promoInfo ? ` (promo: ${promoInfo.clean})` : ''}`);
+  res.status(201).json({ row, balance });
+});
+
 export default r;

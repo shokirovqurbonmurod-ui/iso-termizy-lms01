@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowUp, Hash, Users, User, Search, Plus, Smile, Paperclip, Image, UserPlus, X, Lock, KeyRound, Mic, Video as VideoIcon, Trash2, Download, FileText, Reply, Pin, SmilePlus, ChevronDown, ChevronUp, Crown, Copy, Bot, Phone } from 'lucide-react';
+import { ArrowUp, Hash, Users, User, Search, Plus, Smile, Paperclip, Image, UserPlus, X, Lock, KeyRound, Mic, Video as VideoIcon, Trash2, Download, FileText, Reply, Pin, SmilePlus, ChevronDown, ChevronUp, Crown, Copy, Bot, Phone, Pencil, Check, BarChart3, Bookmark, BellOff, PinOff } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { Spinner, Modal } from '../components/ui.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -125,12 +125,24 @@ export default function GroupChat() {
   const [showPremium, setShowPremium] = useState(false);
   const [buyingPremium, setBuyingPremium] = useState(false);
   const [premiumErr, setPremiumErr] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [people, setPeople] = useState([]);
   const [chatBots, setChatBots] = useState([]);
   const [showAddBot, setShowAddBot] = useState(false);
   const [newBotName, setNewBotName] = useState('');
   const [newBotIcon, setNewBotIcon] = useState('🤖');
   const [newBotPersona, setNewBotPersona] = useState('');
+  const [readState, setReadState] = useState([]);
+  const [pinRows, setPinRows] = useState([]);
+  const [muteRows, setMuteRows] = useState([]);
+  const [savedMessages, setSavedMessages] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchInChannel, setSearchInChannel] = useState('');
+  const [showPollForm, setShowPollForm] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const videoRef = useRef(null);
@@ -144,7 +156,7 @@ export default function GroupChat() {
   const myStudentRole = user.role === 'student';
 
   async function load() {
-    const [msgs, users, gr, mem, rooms, emojis, premium, people, bots] = await Promise.all([
+    const [msgs, users, gr, mem, rooms, emojis, premium, people, bots, reads, pins, mutes, saved] = await Promise.all([
       api.get('/chat_messages').catch(() => []),
       api.get('/staff').catch(() => []),
       api.get('/groups').catch(() => []),
@@ -154,6 +166,10 @@ export default function GroupChat() {
       api.get('/chat_premium').catch(() => []),
       api.get('/people').catch(() => []),
       api.get('/chat_bots').catch(() => []),
+      api.get('/chat_read_state').catch(() => []),
+      api.get('/chat_pins').catch(() => []),
+      api.get('/chat_mutes').catch(() => []),
+      api.get('/chat_saved').catch(() => []),
     ]);
     setMessages(msgs || []);
     setAllUsers(users || []);
@@ -164,6 +180,10 @@ export default function GroupChat() {
     setPremiumMembers(premium || []);
     setPeople(people || []);
     setChatBots(bots || []);
+    setReadState((reads || []).filter((r) => r.user_name === user.full_name));
+    setPinRows((pins || []).filter((p) => p.user_name === user.full_name));
+    setMuteRows((mutes || []).filter((m) => m.user_name === user.full_name));
+    setSavedMessages((saved || []).filter((s) => s.user_name === user.full_name));
   }
 
   const nowStr = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -235,7 +255,8 @@ export default function GroupChat() {
     if (tab === 'groups') return [...groupItems, ...customGroups];
     const humans = allUsers.filter(u2 => u2.full_name !== user.full_name)
       .map(u2 => ({ key: `DM:${[user.full_name, u2.full_name].sort().join(':')}`, icon: '👤', label: u2.full_name, role: u2.role_label, avatarUrl: u2.avatar_url }));
-    return [...botEntries, ...humans];
+    const savedEntry = { key: `SAVED:${user.full_name}`, icon: '🔖', label: 'Saqlangan xabarlar', role: 'Shaxsiy arxiv', isSavedView: true };
+    return [savedEntry, ...botEntries, ...humans];
   }, [tab, allUsers, customChannels, customGroups, user, visibleChannels, groupItems, botEntries]);
 
   const activeBot = useMemo(() => botEntries.find((b) => b.key === channel), [botEntries, channel]);
@@ -278,9 +299,10 @@ export default function GroupChat() {
     setJoining(false);
   }
 
-  const filteredItems = searchQ.trim()
+  const filteredItems = (searchQ.trim()
     ? items.filter(it => (it.label || it.key).toLowerCase().includes(searchQ.toLowerCase()))
-    : items;
+    : items
+  ).slice().sort((a, b) => (isPinnedChat(b.key) ? 1 : 0) - (isPinnedChat(a.key) ? 1 : 0));
 
   const filtered = useMemo(() => {
     return (messages || [])
@@ -354,7 +376,8 @@ export default function GroupChat() {
   async function buyPremium(planKey) {
     setPremiumErr(''); setBuyingPremium(planKey);
     try {
-      await api.post('/chat-premium/buy', { plan: planKey });
+      await api.post('/chat-premium/buy', { plan: planKey, promo_code: promoCode.trim() || undefined });
+      setPromoCode('');
       await load();
     } catch (e) { setPremiumErr(e.message); }
     setBuyingPremium(false);
@@ -553,6 +576,54 @@ export default function GroupChat() {
 
   const msgCount = ch => (messages || []).filter(m => m.channel === ch).length;
 
+  const readStateFor = (ch) => readState.find((r) => r.channel === ch);
+  const unreadCount = (ch) => {
+    const lastId = Number(readStateFor(ch)?.last_read_id) || 0;
+    return (messages || []).filter((m) => m.channel === ch && Number(m.id) > lastId && m.sender !== user.full_name).length;
+  };
+  const isPinnedChat = (key) => pinRows.some((p) => p.channel === key);
+  const isMutedChat = (key) => muteRows.some((m) => m.channel === key);
+
+  async function toggleChatPin(key) {
+    const row = pinRows.find((p) => p.channel === key);
+    if (row) await api.del(`/chat_pins/${row.id}`).catch(() => {});
+    else await api.post('/chat_pins', { user_name: user.full_name, channel: key }).catch(() => {});
+    await load();
+  }
+
+  async function toggleChatMute(key) {
+    const row = muteRows.find((m) => m.channel === key);
+    if (row) await api.del(`/chat_mutes/${row.id}`).catch(() => {});
+    else await api.post('/chat_mutes', { user_name: user.full_name, channel: key }).catch(() => {});
+    await load();
+  }
+
+  // Kanalni ochganda (yoki unga yangi xabar kelganda, hozir shu yerda o'tirganimizda) "o'qilgan" deb belgilaymiz.
+  useEffect(() => {
+    if (!messages || !channel) return;
+    const maxId = Math.max(0, ...messages.filter((m) => m.channel === channel).map((m) => Number(m.id) || 0));
+    if (maxId === 0) return;
+    const existing = readStateFor(channel);
+    if (existing && Number(existing.last_read_id) >= maxId) return;
+    if (existing) api.put(`/chat_read_state/${existing.id}`, { last_read_id: maxId }).then(() => setReadState((rs) => rs.map((r) => r.id === existing.id ? { ...r, last_read_id: maxId } : r))).catch(() => {});
+    else api.post('/chat_read_state', { user_name: user.full_name, channel, last_read_id: maxId }).then((row) => setReadState((rs) => [...rs, row])).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel, messages]);
+
+  const isSaved = (msgId) => savedMessages.some((s) => String(s.message_id) === String(msgId));
+  async function toggleSaved(m) {
+    const existing = savedMessages.find((s) => String(s.message_id) === String(m.id));
+    if (existing) await api.del(`/chat_saved/${existing.id}`).catch(() => {});
+    else await api.post('/chat_saved', { user_name: user.full_name, message_id: m.id, date: new Date().toISOString().slice(0, 10) }).catch(() => {});
+    await load();
+  }
+
+  const SAVED_KEY = `SAVED:${user.full_name}`;
+  const savedMessageObjects = useMemo(() => {
+    const ids = new Set(savedMessages.map((s) => String(s.message_id)));
+    return (messages || []).filter((m) => ids.has(String(m.id))).sort((a, b) => (b.id || 0) - (a.id || 0));
+  }, [savedMessages, messages]);
+
   if (messages === null) return <Spinner />;
 
   return (
@@ -601,7 +672,7 @@ export default function GroupChat() {
                   {count > 0 && (
                     <span className="grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#0A84FF] text-white text-[9px] font-bold shrink-0">{count}</span>
                   )}
-                  {isAdmin && it.roomId && (
+                  {(isAdmin || it.createdBy === user.full_name) && it.roomId && (
                     <button onClick={(e) => { e.stopPropagation(); deleteItem(it); }}
                       className="opacity-0 group-hover:opacity-100 text-navy-300 hover:text-red-500 shrink-0" title="O'chirish">
                       <X size={12} />
@@ -690,7 +761,7 @@ export default function GroupChat() {
         <div className="flex-1 flex flex-col min-w-0">
           <div className="px-4 py-2.5 border-b border-navy-100 flex items-center gap-3 bg-white/50">
             <div className="flex-1 min-w-0">
-              <div className="font-bold text-navy-800">{displayChannel}</div>
+              <div className="font-bold text-navy-800 truncate">{displayChannel}</div>
               {tab === 'private' && !isBotChannel && bioFor(displayChannel) ? (
                 <div className="text-[10px] text-navy-400 truncate">{bioFor(displayChannel)}</div>
               ) : (
@@ -728,15 +799,18 @@ export default function GroupChat() {
                 </button>
               </>
             )}
-            {groupCallEnabled && !groupCall.inCall && (
-              <button onClick={() => groupCall.join('audio')} className="chip bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shrink-0" title="Guruh audio/video chat">
-                <Phone size={11} className="inline -mt-0.5 mr-1" /> Video chat{groupCall.remoteCount > 0 ? ` (${groupCall.remoteCount})` : ''}
+            {groupCallEnabled && !groupCall.inCall && (groupCall.remoteCount > 0 || isAdmin || isRoomAdmin) && (
+              <button onClick={() => groupCall.join('audio')} className="chip bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shrink-0" title={groupCall.remoteCount > 0 ? "Qo'shilish" : "Guruh audio/video chatni boshlash (faqat admin)"}>
+                <Phone size={11} className="inline -mt-0.5 mr-1" />
+                {groupCall.remoteCount > 0 ? `Qo'shilish (${groupCall.remoteCount})` : 'Video chat'}
               </button>
             )}
             <button onClick={() => setShowMembers(!showMembers)} className="grid place-items-center w-8 h-8 rounded-lg hover:bg-navy-50 text-navy-400 transition" title="A'zolar">
               <UserPlus size={16} />
             </button>
             {isAdmin && <span className="chip bg-gold/10 text-gold-700 text-[9px]">Moderator</span>}
+            {!isAdmin && isRoomOwner && <span className="chip bg-gold/10 text-gold-700 text-[9px]"><Crown size={9} className="inline -mt-0.5 mr-0.5" />Egasi</span>}
+            {!isAdmin && !isRoomOwner && isRoomAdmin && <span className="chip bg-navy-50 text-navy-600 text-[9px]"><Crown size={9} className="inline -mt-0.5 mr-0.5" />Admin</span>}
           </div>
 
           {groupCallEnabled && <GroupCallPanel call={groupCall} myName={user.full_name} />}
@@ -817,7 +891,7 @@ export default function GroupChat() {
                         <button onClick={() => setReplyingTo({ id: m.id, sender: m.sender, text: m.text || m.media_name || 'media' })} className="p-1 rounded-full hover:bg-navy-50 text-navy-400" title="Javob berish"><Reply size={12} /></button>
                         <button onClick={() => togglePin(m)} className={`p-1 rounded-full hover:bg-navy-50 ${m.pinned ? 'text-amber-500' : 'text-navy-400'}`} title={m.pinned ? 'Qadashni bekor qilish' : 'Qadash'}><Pin size={12} /></button>
                         <button onClick={() => setReactionPickerFor(reactionPickerFor === m.id ? null : m.id)} className="p-1 rounded-full hover:bg-navy-50 text-navy-400" title="Reaksiya"><SmilePlus size={12} /></button>
-                        {(isMe || isAdmin) && (
+                        {(isMe || canModerate) && (
                           <button onClick={() => deleteMessage(m)} className="p-1 rounded-full hover:bg-red-50 text-navy-400 hover:text-red-500" title="O'chirish"><Trash2 size={12} /></button>
                         )}
                       </div>
@@ -920,7 +994,7 @@ export default function GroupChat() {
                     className={`flex-1 py-2 text-[10px] font-bold ${!showAddMember ? 'text-gold-600 border-b-2 border-gold' : 'text-navy-400'}`}>
                     A'zolar
                   </button>
-                  {isAdmin && (
+                  {canModerate && (
                     <button onClick={() => setShowAddMember(true)}
                       className={`flex-1 py-2 text-[10px] font-bold ${showAddMember ? 'text-gold-600 border-b-2 border-gold' : 'text-navy-400'}`}>
                       + Qo'shish
@@ -944,7 +1018,7 @@ export default function GroupChat() {
                                 <div className="text-[8px] text-navy-400">{u?.role_label || ''}</div>
                               </div>
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                              {isAdmin && (
+                              {canModerate && (
                                 <button onClick={() => removeMember(name)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600" title="Chiqarish">
                                   <X size={10} />
                                 </button>
@@ -956,16 +1030,33 @@ export default function GroupChat() {
                     )}
                     {/* Faol yozganlar */}
                     <div className="text-[9px] font-bold text-navy-500 px-2 py-0.5">Faol ({members.length})</div>
-                    {members.map(m => (
-                      <div key={m.id} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-navy-100/50">
-                        <div className={`w-5 h-5 rounded grid place-items-center bg-gradient-to-br ${avatarColor(m.full_name)} text-white text-[7px] font-bold`}>{m.full_name[0]}</div>
-                        <div className="min-w-0">
-                          <div className="text-[10px] font-semibold text-navy-700 truncate">{m.full_name}</div>
-                          <div className="text-[8px] text-navy-400">{m.role_label}</div>
+                    {members.map(m => {
+                      const isThisAdmin = Array.isArray(customGroupRoom?.admins) && customGroupRoom.admins.includes(m.full_name);
+                      const isThisOwner = customGroupRoom?.created_by === m.full_name;
+                      return (
+                        <div key={m.id} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-navy-100/50 group">
+                          <div className={`w-5 h-5 rounded grid place-items-center bg-gradient-to-br ${avatarColor(m.full_name)} text-white text-[7px] font-bold`}>{m.full_name[0]}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-semibold text-navy-700 truncate flex items-center gap-1">
+                              {m.full_name}
+                              {isThisOwner && <Crown size={9} className="text-gold-500 shrink-0" title="Guruh egasi" />}
+                              {!isThisOwner && isThisAdmin && (
+                                <Crown size={9} className="text-navy-400 shrink-0" title="Guruh admini" />
+                              )}
+                            </div>
+                            <div className="text-[8px] text-navy-400">{m.role_label}</div>
+                          </div>
+                          {isRoomOwner && !isThisOwner && customGroupRoom && (
+                            <button onClick={() => toggleRoomAdmin(m.full_name)}
+                              className={`opacity-0 group-hover:opacity-100 shrink-0 ${isThisAdmin ? 'text-gold-600 hover:text-navy-400' : 'text-navy-300 hover:text-gold-600'}`}
+                              title={isThisAdmin ? "Admin huquqini bekor qilish" : "Admin qilish"}>
+                              <Crown size={11} />
+                            </button>
+                          )}
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                         </div>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 ml-auto" />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="flex-1 overflow-y-auto p-2">
@@ -1132,6 +1223,12 @@ export default function GroupChat() {
             <div className="text-sm font-bold text-emerald-600 bg-emerald-50 rounded-xl py-2.5">✅ Sizda Chat Premium faol</div>
           ) : (
             <>
+              <div className="mb-3">
+                <label className="label">Promo kod (bo'lsa)</label>
+                <input className="input !py-2 text-sm uppercase" placeholder="Masalan: ISO2026" value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value.toUpperCase())} />
+                {promoCode.trim() && <p className="text-[10px] text-emerald-600 mt-1">✅ Promo kod to'g'ri bo'lsa, tarif bepul beriladi.</p>}
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {PREMIUM_PLANS.map((plan) => (
                   <button key={plan.key} onClick={() => buyPremium(plan.key)} disabled={!!buyingPremium}
@@ -1140,7 +1237,7 @@ export default function GroupChat() {
                     }`}>
                     {plan.popular && <span className="absolute -top-2 right-2 chip bg-gold text-white text-[8px] !px-1.5 !py-0.5">Mashhur</span>}
                     <div className="text-sm font-bold text-navy-800">{plan.label}</div>
-                    <div className="text-xs text-gold-600 font-bold mt-0.5">{plan.coins} 🪙</div>
+                    <div className="text-xs text-gold-600 font-bold mt-0.5">{promoCode.trim() ? 'BEPUL (promo)' : `${plan.coins} 🪙`}</div>
                     {plan.save && <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">{plan.save}</div>}
                     {buyingPremium === plan.key && <div className="text-[10px] text-navy-400 mt-1">Sotib olinmoqda...</div>}
                   </button>

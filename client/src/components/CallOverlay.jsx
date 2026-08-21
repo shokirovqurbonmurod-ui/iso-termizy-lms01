@@ -1,9 +1,19 @@
+import { useEffect, useRef } from 'react';
 import { Phone, PhoneOff, Video as VideoIcon, Mic, MicOff, VideoOff } from 'lucide-react';
+import { createRingback } from '../lib/ringtone.js';
 
 // Faol/kiruvchi/chiquvchi qo'ng'iroq uchun butun ekranli overlay. `call` — useCall() hook natijasi.
 export default function CallOverlay({ call, peerName }) {
   const { callState, callKind, callError, muted, camOff, localVideoRef, remoteVideoRef,
     acceptCall, declineCall, endCall, toggleMute, toggleCam } = call;
+
+  const ringRef = useRef(null);
+  useEffect(() => {
+    if (!ringRef.current) ringRef.current = createRingback();
+    if (callState === 'calling' || callState === 'ringing') ringRef.current.start();
+    else ringRef.current.stop();
+  }, [callState]);
+  useEffect(() => () => ringRef.current?.stop(), []);
 
   if (callState === 'idle' && !callError) return null;
 
