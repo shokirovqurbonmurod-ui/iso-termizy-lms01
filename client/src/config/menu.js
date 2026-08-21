@@ -162,6 +162,7 @@ export const MENU = [
       { key: 'market-research', label: 'Bozor tadqiqoti', icon: UserSearch, kind: 'resource', resource: 'market_research', roles: ADMIN_ONLY },
       { key: 'customer-journey', label: 'Mijoz yo\'li', icon: Map, kind: 'resource', resource: 'customer_journey', roles: ADMIN_ONLY },
       { key: 'sales-targets', label: 'Sotuv maqsadlari', icon: Target, kind: 'resource', resource: 'sales_targets', roles: ADMIN_ONLY },
+      { key: 'kpi-dashboard', label: 'KPI ko\'rsatkichlari', icon: Gauge, kind: 'resource', resource: 'kpi_dashboard', roles: ADMIN_ONLY },
     ],
   },
   {
@@ -220,7 +221,7 @@ export const MENU = [
         { key: 'parent_dashboard', label: 'Panel', icon: Users, kind: 'parentdashboard', roles: null },
         { key: 'parent-notifications', label: 'Xabarnoma', icon: Bell, kind: 'parentnotifications', roles: null },
         { key: 'parent-rep', label: 'Haftalik hisobot', icon: FileText, kind: 'parentreports', roles: null },
-        { key: 'parent-meet', label: 'Uchrashuv', icon: Calendar, kind: 'meetings', roles: null },
+        { key: 'parent-meet', label: 'Uchrashuv', icon: Calendar, kind: 'resource', resource: 'parent_meetings', roles: null },
       ] },
       { key: 'complaints-center', label: 'Shikoyatlar markazi', icon: AlertTriangle, kind: 'tabs', roles: ['director','super_admin','admin','reception','hr','it_admin'], tabs: [
         { key: 'complaints', label: 'Shikoyatlar', icon: AlertTriangle, kind: 'complaints', roles: ['director','super_admin','admin','reception','hr'] },

@@ -345,6 +345,8 @@ app.use('/api/access_control', crudRouter('access_control',
   ['person', 'area', 'access_level', 'date', 'status']));
 app.use('/api/first_aid_log', crudRouter('first_aid_log',
   ['person', 'incident', 'treatment', 'date', 'status']));
+app.use('/api/visitor_log', crudRouter('visitor_log',
+  ['visitor_name', 'phone', 'purpose', 'host_name', 'check_in', 'check_out', 'status']));
 app.use('/api/parent_reports', crudRouter('parent_reports',
   ['student', 'week', 'summary', 'sent_date']));
 app.use('/api/department_budgets', crudRouter('department_budgets',
@@ -371,6 +373,10 @@ app.use('/api/nps_scores', crudRouter('nps_scores',
   ['period', 'score', 'respondents', 'date']));
 app.use('/api/parent_notifications', crudRouter('parent_notifications',
   ['student', 'message', 'channel', 'date', 'status']));
+app.use('/api/parent_meetings', crudRouter('parent_meetings',
+  ['parent_name', 'student', 'purpose', 'date', 'time', 'status']));
+app.use('/api/kpi_dashboard', crudRouter('kpi_dashboard',
+  ['metric_name', 'category', 'target', 'actual', 'period', 'status']));
 app.use('/api/franchise_dashboard', crudRouter('franchise_dashboard',
   ['branch', 'investment', 'royalty_pct', 'status']));
 
