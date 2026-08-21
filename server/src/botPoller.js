@@ -88,12 +88,20 @@ function onboardInstructions(roleKey) {
 // so'rovi bo'yicha). "mini_app_url" sozlangan bo'lsa Mini App tugmasi ham qo'shiladi (web_app tugmasi
 // faqat shaxsiy chatda ishlaydi, shuning uchun bu funksiya guruhda chaqirilmaydi).
 // callback_data shunchaki buyruq nomi (masalan "balance"), handleCallbackQuery shuni commandReply'ga uzatadi.
-function mainMenuKeyboard() {
-  const rows = [
+// Rolga qarab — chunki /balance, /schedule kabi buyruqlar faqat o'quvchi hisobida ishlaydi
+// (commandReply ichida student() orqali tekshiriladi), boshqa rolga shu tugmalarni ko'rsatish
+// faqat "bu buyruq faqat o'quvchilar uchun" xatosiga olib kelardi.
+function mainMenuKeyboard(role) {
+  const rows = role === 'student' ? [
     [{ text: '🪙 Balans', callback_data: 'balance' }, { text: '📅 Jadval', callback_data: 'schedule' }],
     [{ text: "💳 To'lovlar", callback_data: 'payments' }, { text: '👥 Guruh', callback_data: 'group' }],
     [{ text: '📋 Davomat', callback_data: 'attendance' }, { text: '📚 Uy vazifa', callback_data: 'homework' }],
     [{ text: '📝 Imtihonlar', callback_data: 'exams' }, { text: '🏆 Sertifikatlar', callback_data: 'certificates' }],
+    [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }],
+  ] : FINANCE_ROLES.includes(role) ? [
+    [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: '📊 Moliya', callback_data: 'finance' }],
+    [{ text: 'ℹ️ Yordam', callback_data: 'help' }],
+  ] : [
     [{ text: "📢 E'lonlar", callback_data: 'announcements' }, { text: 'ℹ️ Yordam', callback_data: 'help' }],
   ];
   const url = getBotSettings()?.mini_app_url;
@@ -497,7 +505,7 @@ async function handleMessage(msg) {
       chat_id: chatId, user_id: pending.user_id, user_name: pending.user_name, role: pending.role, linked_at: now(),
     });
     reactTo(chatId, msg.message_id, REACTIONS.linked);
-    return sendMessage(chatId, `✅ Hisobingiz muvaffaqiyatli ulandi, ${pending.user_name}! 🎉\n\nEndi quyidagi tugmalardan foydalanib kerakli ma'lumotni bir bosishda oling 👇`, null, mainMenuKeyboard());
+    return sendMessage(chatId, `✅ Hisobingiz muvaffaqiyatli ulandi, ${pending.user_name}! 🎉\n\nEndi quyidagi tugmalardan foydalanib kerakli ma'lumotni bir bosishda oling 👇`, null, mainMenuKeyboard(pending.role));
   }
 
   const link = store.where('telegram_links', (l) => l.chat_id === chatId)[0];
@@ -544,11 +552,11 @@ async function handleMessage(msg) {
   const reply = commandReply(cmdName, link);
   if (reply) {
     reactTo(chatId, msg.message_id, REACTIONS.ok);
-    return sendMessage(chatId, reply, null, cmdName === 'help' ? mainMenuKeyboard() : undefined);
+    return sendMessage(chatId, reply, null, cmdName === 'help' ? mainMenuKeyboard(link.role) : undefined);
   }
 
   reactTo(chatId, msg.message_id, REACTIONS.unknown);
-  return sendMessage(chatId, "Noma'lum buyruq. Quyidagi menyudan tanlang yoki /help yozing.", null, mainMenuKeyboard());
+  return sendMessage(chatId, "Noma'lum buyruq. Quyidagi menyudan tanlang yoki /help yozing.", null, mainMenuKeyboard(link.role));
 }
 
 // Doimiy menyu tugmalari (masalan "🪙 Balans") bosilganda keladigan callback_query'ni oddiy
@@ -574,7 +582,7 @@ async function handleCallbackQuery(cq) {
   const link = cq.from?.id ? store.where('telegram_links', (l) => Number(l.chat_id) === cq.from.id)[0] : null;
   if (!link) return sendMessage(chatId, "Hisobingiz ulanmagan. Shaxsiy chatda /start yozib ulang.", messageThreadId);
   const reply = commandReply(cq.data, link);
-  if (reply) return sendMessage(chatId, reply, messageThreadId, cq.data === 'help' ? mainMenuKeyboard() : undefined);
+  if (reply) return sendMessage(chatId, reply, messageThreadId, cq.data === 'help' ? mainMenuKeyboard(link.role) : undefined);
 }
 
 async function poll() {
