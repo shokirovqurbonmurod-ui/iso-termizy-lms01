@@ -1,16 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Coins, Trophy, TrendingUp, Flame, Gift, Star, Target, Award } from 'lucide-react';
+import { Coins, Trophy, TrendingUp, Flame, Gift, Star } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { PageHeader, Spinner } from '../components/ui.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { money } from '../lib/format.js';
-
-const CHALLENGES = [
-  { title: '7 kun ketma-ket davomat', reward: 50, icon: '🔥', progress: 5, target: 7 },
-  { title: '5 ta uy vazifasini bajaring', reward: 30, icon: '📝', progress: 3, target: 5 },
-  { title: 'Testdan 90%+ oling', reward: 40, icon: '🎯', progress: 0, target: 1 },
-  { title: "Do'stingizni taklif qiling", reward: 100, icon: '👥', progress: 0, target: 1 },
-];
 
 // Oddiy bar chart
 function BarChart({ data, height = 200 }) {
@@ -92,7 +85,17 @@ export default function CoinDashboard() {
       last7.push({ label: ds, value: dayCoins });
     }
     
-    return { totalCoins, totalPoints, avgStreak, topStreak, earned, spent, top7, last7 };
+    // Bugun eng faol o'quvchilar — kim eng ko'p coin harakati (berilgan yoki sarflangan) qilgani.
+    const today = new Date().toISOString().slice(0, 10);
+    const byStudentToday = {};
+    for (const l of coinLog) {
+      if ((l.at || '').slice(0, 10) !== today) continue;
+      byStudentToday[l.student] = (byStudentToday[l.student] || 0) + Math.abs(l.amount || 0);
+    }
+    const activeToday = Object.entries(byStudentToday).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const activeStudentsPct = students.length ? Math.round((students.filter((s) => (s.coins || 0) > 0).length / students.length) * 100) : 0;
+
+    return { totalCoins, totalPoints, avgStreak, topStreak, earned, spent, top7, last7, activeToday, activeStudentsPct };
   }, [students, coinLog]);
 
   if (loading) return <Spinner />;
@@ -148,26 +151,25 @@ export default function CoinDashboard() {
           <BarChart data={stats.top7.map(s => ({ label: s.full_name.split(' ')[0], value: s.coins || 0 }))} height={140} />
         </div>
 
-        {/* Challenges */}
+        {/* Bugun eng faol o'quvchilar — haqiqiy coin_log ma'lumotidan */}
         <div className="card p-5">
-          <h3 className="font-display text-lg text-navy-800 mb-4">🎯 Kunlik challengelar</h3>
-          <div className="space-y-3">
-            {CHALLENGES.map((ch, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl bg-navy-50/60 px-4 py-3">
-                <span className="text-2xl">{ch.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-navy-800">{ch.title}</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="flex-1 h-2 rounded-full bg-navy-100 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-gold-400 to-gold-500 rounded-full transition-all" style={{ width: `${(ch.progress / ch.target) * 100}%` }} />
-                    </div>
-                    <span className="text-[10px] text-navy-500 font-bold">{ch.progress}/{ch.target}</span>
-                  </div>
-                </div>
-                <div className="chip bg-gold/10 text-gold-700">🪙 +{ch.reward}</div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-lg text-navy-800">🎯 Bugun eng faol o'quvchilar</h3>
+            <span className="chip bg-gold/10 text-gold-700 text-[10px]">{stats.activeStudentsPct}% faol (jami)</span>
           </div>
+          {stats.activeToday.length === 0 ? (
+            <p className="text-sm text-navy-300 text-center py-6">Bugun hali coin harakati bo'lmagan</p>
+          ) : (
+            <div className="space-y-2">
+              {stats.activeToday.map(([name, amount], i) => (
+                <div key={name} className="flex items-center gap-3 rounded-xl bg-navy-50/60 px-4 py-2.5">
+                  <span className="grid place-items-center w-7 h-7 rounded-full bg-gold/15 text-gold-700 text-xs font-bold shrink-0">{i + 1}</span>
+                  <span className="flex-1 min-w-0 text-sm font-semibold text-navy-800 truncate">{name}</span>
+                  <span className="chip bg-gold/10 text-gold-700 text-[11px] shrink-0">🪙 {amount}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

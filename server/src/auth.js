@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 // Login rate limiting — bir telefon raqamiga ketma-ket noto'g'ri urinishlar ko'p bo'lsa,
 // hisobni vaqtincha bloklaydi (kuchli parol taxmin qilish hujumlariga qarshi).
 const loginAttempts = {};
-const MAX_ATTEMPTS = 7;
+const MAX_ATTEMPTS = 5;
 const LOCK_TIME = 10 * 60 * 1000; // 10 daqiqa
 
 // lastPhoto — faqat qabulxona kiosk qurilmasidan (foydalanuvchi roziligi bilan yoqilgan) kelgan
@@ -64,8 +64,11 @@ export function authRequired(req, res, next) {
 // Block write operations for read-only roles (students, parents).
 export function canMutate(req, res, next) {
   const role = req.user?.role;
-  // Chat va survey_votes ga hammaga ruxsat
-  const openTables = ['/api/chat_messages', '/api/survey_votes'];
+  // Chat va survey_votes ga hammaga ruxsat. quiz_attempts ham shu yerda — aks holda o'quvchi
+  // testni yechsa ham natijasi hech qachon saqlanmasdi (quiz avg_score'i ham yangilanmasdi).
+  const openTables = ['/api/chat_messages', '/api/survey_votes', '/api/chat_rooms', '/api/uploads',
+    '/api/chat_read_state', '/api/chat_pins', '/api/chat_mutes', '/api/chat_saved',
+    '/api/chat_typing', '/api/user_presence', '/api/chat_reports', '/api/quiz_attempts'];
   if (openTables.some(t => req.baseUrl === t || req.originalUrl?.startsWith(t))) return next();
   const readOnly = ['student', 'parent', 'guest'];
   if (readOnly.includes(role) && !isAdmin(role)) {
