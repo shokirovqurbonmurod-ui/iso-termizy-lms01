@@ -95,8 +95,20 @@ export default function CoinDashboard() {
     const activeToday = Object.entries(byStudentToday).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const activeStudentsPct = students.length ? Math.round((students.filter((s) => (s.coins || 0) > 0).length / students.length) * 100) : 0;
 
-    return { totalCoins, totalPoints, avgStreak, topStreak, earned, spent, top7, last7, activeToday, activeStudentsPct };
+    // Eng ko'p sotib olingan Coin Shop sovg'alari — /coins/spend har doim "Coin Shop: <nomi>" deb
+    // coin_log'ga yozadi, shundan haqiqiy talab qilinishini hisoblaymiz.
+    const shopCounts = {};
+    for (const l of coinLog) {
+      if (!l.reason?.startsWith('Coin Shop: ')) continue;
+      const item = l.reason.slice('Coin Shop: '.length);
+      shopCounts[item] = (shopCounts[item] || 0) + 1;
+    }
+    const topShopItems = Object.entries(shopCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    return { totalCoins, totalPoints, avgStreak, topStreak, earned, spent, top7, last7, activeToday, activeStudentsPct, topShopItems };
   }, [students, coinLog]);
+
+  const MEDALS = ['🥇', '🥈', '🥉'];
 
   if (loading) return <Spinner />;
 
@@ -144,7 +156,7 @@ export default function CoinDashboard() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6 mb-6">
+      <div className="grid lg:grid-cols-3 gap-6 mb-6">
         {/* TOP o'quvchilar (bar) */}
         <div className="card p-5">
           <h3 className="font-display text-lg text-navy-800 mb-4">🏆 TOP 7 — Coin bo'yicha</h3>
@@ -162,10 +174,32 @@ export default function CoinDashboard() {
           ) : (
             <div className="space-y-2">
               {stats.activeToday.map(([name, amount], i) => (
-                <div key={name} className="flex items-center gap-3 rounded-xl bg-navy-50/60 px-4 py-2.5">
-                  <span className="grid place-items-center w-7 h-7 rounded-full bg-gold/15 text-gold-700 text-xs font-bold shrink-0">{i + 1}</span>
+                <div key={name} className={`flex items-center gap-3 rounded-xl px-4 py-2.5 transition ${i === 0 ? 'bg-gradient-to-r from-gold-100/60 to-gold-50/30' : 'bg-navy-50/60'}`}>
+                  <span className={`grid place-items-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${i < 3 ? 'text-base' : 'bg-gold/15 text-gold-700'}`}>
+                    {i < 3 ? MEDALS[i] : i + 1}
+                  </span>
                   <span className="flex-1 min-w-0 text-sm font-semibold text-navy-800 truncate">{name}</span>
                   <span className="chip bg-gold/10 text-gold-700 text-[11px] shrink-0">🪙 {amount}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Eng ko'p sotib olingan Coin Shop sovg'alari — haqiqiy talab, statik ro'yxat emas */}
+        <div className="card p-5">
+          <h3 className="font-display text-lg text-navy-800 mb-4">🎁 Eng ko'p so'ralgan sovg'alar</h3>
+          {stats.topShopItems.length === 0 ? (
+            <p className="text-sm text-navy-300 text-center py-6">Hali sovg'a sotib olinmagan</p>
+          ) : (
+            <div className="space-y-2">
+              {stats.topShopItems.map(([item, count], i) => (
+                <div key={item} className={`flex items-center gap-3 rounded-xl px-4 py-2.5 transition ${i === 0 ? 'bg-gradient-to-r from-gold-100/60 to-gold-50/30' : 'bg-navy-50/60'}`}>
+                  <span className={`grid place-items-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${i < 3 ? 'text-base' : 'bg-gold/15 text-gold-700'}`}>
+                    {i < 3 ? MEDALS[i] : i + 1}
+                  </span>
+                  <span className="flex-1 min-w-0 text-sm font-semibold text-navy-800 truncate">{item}</span>
+                  <span className="chip bg-navy-100 text-navy-600 text-[11px] shrink-0">{count} marta</span>
                 </div>
               ))}
             </div>

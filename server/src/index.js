@@ -41,6 +41,9 @@ import pettyCashRoutes from './routes/pettyCash.js';
 import travelRequestsRoutes from './routes/travelRequests.js';
 import diaryRoutes from './routes/diary.js';
 import eventTicketsRoutes from './routes/eventTickets.js';
+import challengesRoutes from './routes/challenges.js';
+import teamBattlesRoutes from './routes/teamBattles.js';
+import marketplaceRoutes from './routes/marketplace.js';
 import announcementsRoutes from './routes/announcements.js';
 import communicationRoutes from './routes/communication.js';
 import callSignalsRoutes from './routes/callSignals.js';
@@ -264,8 +267,15 @@ app.use('/api/essays', crudRouter('essays',
 app.use('/api/survey_votes', crudRouter('survey_votes',
   ['survey', 'voter', 'vote', 'comment', 'date']));
 app.use('/api/chat_messages', chatRoutes);
-app.use('/api/chat_rooms', crudRouter('chat_rooms', ['type', 'name', 'icon', 'created_by', 'date', 'invite_code', 'admins']));
+app.use('/api/chat_rooms', crudRouter('chat_rooms', ['type', 'name', 'icon', 'created_by', 'date', 'invite_code', 'admins', 'description']));
 app.use('/api/chat_rooms', chatRoomAdminsRoutes);
+app.use('/api/chat_read_state', crudRouter('chat_read_state', ['user_name', 'channel', 'last_read_id']));
+app.use('/api/chat_pins', crudRouter('chat_pins', ['user_name', 'channel']));
+app.use('/api/chat_mutes', crudRouter('chat_mutes', ['user_name', 'channel']));
+app.use('/api/chat_saved', crudRouter('chat_saved', ['user_name', 'message_id', 'date']));
+app.use('/api/chat_typing', crudRouter('chat_typing', ['user_name', 'channel', 'at']));
+app.use('/api/user_presence', crudRouter('user_presence', ['user_name', 'last_seen']));
+app.use('/api/chat_reports', crudRouter('chat_reports', ['message_id', 'reported_by', 'reason', 'message_snippet', 'message_sender', 'channel', 'date', 'status']));
 app.use('/api/chat_custom_emojis', crudRouter('chat_custom_emojis', ['emoji', 'added_by', 'date']));
 app.use('/api/chat_premium', crudRouter('chat_premium', ['student', 'purchased_at', 'expires_at', 'cost_coins']));
 app.use('/api/chat_bots', crudRouter('chat_bots', ['name', 'icon', 'persona', 'created_by', 'date']));
@@ -289,6 +299,10 @@ app.use('/api/messages', crudRouter('messages',
   ['title', 'channel', 'audience', 'date', 'status']));
 app.use('/api/coin_shop', crudRouter('coin_shop',
   ['item', 'icon', 'cost', 'tone', 'status']));
+// CoinDashboard.jsx va PointGive.jsx to'g'ridan-to'g'ri '/coin_log' chaqiradi (boshqa 300+ jadval
+// kabi) — '/api/coins/log' esa alohida, faqat o'qish uchun (100 tagacha) alias sifatida qoladi.
+app.use('/api/coin_log', crudRouter('coin_log',
+  ['student', 'amount', 'reason', 'given_by', 'at']));
 app.use('/api/lesson_ratings', crudRouter('lesson_ratings',
   ['teacher', 'group_name', 'date', 'score', 'punctuality', 'engagement', 'methodology', 'comment', 'rated_by']));
 app.use('/api/lesson_plans', crudRouter('lesson_plans',
@@ -386,8 +400,8 @@ app.use('/api/daily_bonus', rewardCrudRouter('daily_bonus', ['student', 'streak_
 app.use('/api/weekly_tasks', crudRouter('weekly_tasks', ['title', 'target', 'reward_coins', 'week', 'status']));
 app.use('/api/levels', crudRouter('levels', ['level_name', 'min_xp', 'max_xp', 'reward_badge']));
 app.use('/api/xp_log', crudRouter('xp_log', ['student', 'amount', 'reason', 'date']));
-app.use('/api/challenges_1v1', crudRouter('challenges_1v1', ['challenger', 'opponent', 'subject', 'winner', 'date', 'status']));
-app.use('/api/team_battles', crudRouter('team_battles', ['team_a', 'team_b', 'subject', 'winner', 'date', 'status']));
+app.use('/api/challenges_1v1', challengesRoutes);
+app.use('/api/team_battles', teamBattlesRoutes);
 app.use('/api/mystery_box', rewardCrudRouter('mystery_box', ['student', 'reward', 'coins', 'date'],
   (row) => `🎁 Farzandingiz ${row.student} Mystery Box'dan "${row.reward}" (${row.coins || 0} coin) yutdi!`));
 app.use('/api/homework_streak', crudRouter('homework_streak', ['student', 'streak_days', 'reward_coins', 'status']));
@@ -421,7 +435,7 @@ app.use('/api/fitness_challenge', crudRouter('fitness_challenge', ['title', 'tar
 app.use('/api/fitness_logs', crudRouter('fitness_logs', ['challenge_id', 'student', 'amount', 'date']));
 app.use('/api/stock_game', crudRouter('stock_game', ['student', 'portfolio_value', 'rank', 'date']));
 app.use('/api/chat_voice', crudRouter('chat_voice', ['from_name', 'to_name', 'duration_sec', 'date']));
-app.use('/api/video_lessons', crudRouter('video_lessons', ['title', 'subject', 'teacher', 'duration_min', 'url']));
+app.use('/api/video_lessons', crudRouter('video_lessons', ['title', 'subject', 'teacher', 'duration_min', 'url', 'quiz_id', 'assignment_id']));
 app.use('/api/video_views', crudRouter('video_views', ['video_id', 'video_title', 'student', 'date']));
 app.use('/api/learning_map', crudRouter('learning_map', ['title', 'subject', 'milestones', 'status']));
 app.use('/api/social_shares', crudRouter('social_shares', ['student', 'platform', 'content', 'date']));
@@ -429,7 +443,7 @@ app.use('/api/theme_settings', crudRouter('theme_settings', ['user', 'theme_name
 app.use('/api/calculator_history', crudRouter('calculator_history', ['user', 'expression', 'result', 'date']));
 app.use('/api/study_groups', crudRouter('study_groups', ['name', 'subject', 'members_count', 'meeting_time']));
 app.use('/api/study_group_members', crudRouter('study_group_members', ['group_id', 'student', 'date']));
-app.use('/api/marketplace', crudRouter('marketplace', ['item_name', 'seller', 'price', 'status']));
+app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/event_tickets', crudRouter('event_tickets', ['event_title', 'buyer', 'price', 'date', 'status']));
 app.use('/api/tournament_bracket', crudRouter('tournament_bracket', ['tournament_name', 'round', 'participant_a', 'participant_b', 'winner']));
 app.use('/api/role_play_scenarios', crudRouter('role_play_scenarios', ['title', 'level', 'description', 'status']));
