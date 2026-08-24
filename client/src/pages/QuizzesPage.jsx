@@ -13,9 +13,12 @@ export default function QuizzesPage() {
   const [quizzes, setQuizzes] = useState(null);
   const [groups, setGroups] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [videoLessons, setVideoLessons] = useState([]);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ title: '', subject: SUBJECTS[0], group_name: '', duration: 15 });
   const [saving, setSaving] = useState(false);
+  const [subjectFilter, setSubjectFilter] = useState('all');
+  const [lessonFilter, setLessonFilter] = useState('all');
 
   const [manageQuiz, setManageQuiz] = useState(null);
   const [qModal, setQModal] = useState(false);
@@ -29,18 +32,28 @@ export default function QuizzesPage() {
   const [finished, setFinished] = useState(null);
 
   async function load() {
-    const [q, g, qs] = await Promise.all([
+    const [q, g, qs, vl] = await Promise.all([
       api.get('/quizzes?limit=500').catch(() => []),
       api.get('/groups').catch(() => []),
       api.get('/quiz_questions?limit=2000').catch(() => []),
+      api.get('/video_lessons?limit=500').catch(() => []),
     ]);
-    setQuizzes(q || []); setGroups(g || []); setQuestions(qs || []);
+    setQuizzes(q || []); setGroups(g || []); setQuestions(qs || []); setVideoLessons(vl || []);
   }
   useEffect(() => { load(); }, []);
 
   function questionsFor(quizId) { return questions.filter((q) => String(q.quiz_id) === String(quizId) && q.status !== 'archived'); }
+  // Bu test qaysi video darsga bog'langan bo'lsa — shu darsni topib beradi (filtr va kartochkada ko'rsatish uchun).
+  function lessonFor(quizId) { return videoLessons.find((v) => String(v.quiz_id) === String(quizId)); }
 
-  const active = useMemo(() => (quizzes || []).filter((q) => q.status !== 'archived'), [quizzes]);
+  const subjectsInUse = useMemo(() => [...new Set((quizzes || []).map((q) => q.subject).filter(Boolean))], [quizzes]);
+  const lessonsInUse = useMemo(() => videoLessons.filter((v) => v.quiz_id), [videoLessons]);
+
+  const active = useMemo(() => (quizzes || [])
+    .filter((q) => q.status !== 'archived')
+    .filter((q) => subjectFilter === 'all' || q.subject === subjectFilter)
+    .filter((q) => lessonFilter === 'all' || String(lessonFor(q.id)?.id) === lessonFilter),
+    [quizzes, subjectFilter, lessonFilter, videoLessons]);
 
   function openAdd() {
     setForm({ title: '', subject: SUBJECTS[0], group_name: groups[0]?.name || '', duration: 15 });
@@ -237,10 +250,22 @@ export default function QuizzesPage() {
       <PageHeader icon={ListChecks} title="Testlar (Quiz)" subtitle="Guruhlar uchun testlar va o'rtacha natijalar"
         actions={canManage && <button className="btn-gold" onClick={openAdd}><Plus size={16} /> Yangi test</button>} />
 
+      <div className="flex flex-wrap gap-2 mb-5">
+        <select className="input !py-2 !w-auto text-xs" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
+          <option value="all">Barcha fanlar</option>
+          {subjectsInUse.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className="input !py-2 !w-auto text-xs" value={lessonFilter} onChange={(e) => setLessonFilter(e.target.value)}>
+          <option value="all">Barcha darslar</option>
+          {lessonsInUse.map((v) => <option key={v.id} value={String(v.id)}>{v.title}</option>)}
+        </select>
+      </div>
+
       {active.length === 0 ? <Empty icon={ListChecks} title="Test yo'q" /> : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {active.map((q) => {
             const qCount = questionsFor(q.id).length;
+            const lesson = lessonFor(q.id);
             return (
               <div key={q.id} className="card p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -248,7 +273,12 @@ export default function QuizzesPage() {
                   <span className="text-[11px] font-bold text-navy-600">{q.avg_score || 0}%</span>
                 </div>
                 <div className="text-sm font-bold text-navy-800 mb-0.5">{q.title}</div>
-                <div className="text-xs text-navy-400 mb-3">{q.group_name}</div>
+                <div className="text-xs text-navy-400 mb-1">{q.group_name}</div>
+                {lesson && (
+                  <div className="flex items-center gap-1 text-[10px] text-gold-600 mb-2">
+                    <Play size={9} /> {lesson.title}
+                  </div>
+                )}
                 <div className="flex items-center gap-4 text-[11px] text-navy-400 mb-3">
                   <span className="flex items-center gap-1"><HelpCircle size={11} /> {qCount} savol</span>
                   <span className="flex items-center gap-1"><Clock size={11} /> {q.duration} daq</span>

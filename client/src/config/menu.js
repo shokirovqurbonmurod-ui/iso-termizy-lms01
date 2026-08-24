@@ -214,6 +214,7 @@ export const MENU = [
       { key: 'bot', label: 'Telegram Bot', icon: Bot, kind: 'bot', roles: null },
       { key: 'media-center', label: 'Media markazi', icon: Video, kind: 'tabs', roles: null, tabs: [
         { key: 'video-lessons', label: 'Video darslar', icon: Video, kind: 'videolessonspage', roles: null },
+        { key: 'media-quizzes', label: 'Testlar', icon: ListChecks, kind: 'quizzespage', roles: null },
         { key: 'success-stories', label: 'Muvaffaqiyat tarixi', icon: Trophy, kind: 'successstories', roles: null },
       ] },
       { key: 'parents-center', label: "Ota-onalar markazi", icon: Users2, kind: 'tabs', roles: ['director','super_admin','admin','reception','teacher','senior_teacher','parent'], tabs: [
@@ -316,15 +317,15 @@ export const MENU = [
         { key: 'document-templates', label: 'Hujjat shabloni', icon: FileText, kind: 'resource', resource: 'document_templates', roles: STAFF_ONLY },
         { key: 'missions-challenges', label: 'Missiyalar & Challenges', icon: Target, kind: 'tabs', roles: ['director','super_admin','admin','academic_manager','teacher','student'], tabs: [
           { key: 'missions', label: 'Missiyalar', icon: Target, kind: 'missions', roles: ['director','super_admin','admin','academic_manager','teacher','student'] },
-          { key: 'challenges', label: '1v1 Challenge', icon: Target, kind: 'resource', resource: 'challenges_1v1', roles: null },
-          { key: 'team-battles', label: 'Jamoa janglari', icon: ShieldCheck, kind: 'resource', resource: 'team_battles', roles: null },
+          { key: 'challenges', label: '1v1 Challenge', icon: Target, kind: 'challengespage', roles: null },
+          { key: 'team-battles', label: 'Jamoa janglari', icon: ShieldCheck, kind: 'teambattlespage', roles: null },
         ] },
         { key: 'badge-level', label: 'Badge & Level', icon: Medal, kind: 'tabs', roles: ['director','super_admin','admin','academic_manager','methodologist'], tabs: [
           { key: 'badges', label: 'Badge boshqaruvi', icon: Medal, kind: 'badgesadmin', roles: ['director','super_admin','admin','academic_manager','methodologist'] },
           { key: 'levels-system', label: 'Level tizimi', icon: TrendingUp, kind: 'resource', resource: 'levels', roles: null },
         ] },
         { key: 'events', label: 'Tadbirlar markazi', icon: Calendar, kind: 'resource', resource: 'events', roles: null },
-        { key: 'market', label: 'Marketplace', icon: ShoppingBag, kind: 'resource', resource: 'marketplace', roles: null },
+        { key: 'market', label: 'Marketplace', icon: ShoppingBag, kind: 'marketplacepage', roles: null },
         { key: 'student-posts-m', label: 'Blog & Ijtimoiy platforma', icon: FileText, kind: 'resource', resource: 'student_posts', roles: null },
         { key: 'ideas-feedback', label: "G'oyalar & Anonim fikr", icon: Lightbulb, kind: 'tabs', roles: null, tabs: [
           { key: 'ideas-m', label: "G'oyalar qutisi", icon: Lightbulb, kind: 'resource', resource: 'ideas_box', roles: null },
