@@ -208,6 +208,10 @@ app.use('/api/sales_pipeline', crudRouter('sales_pipeline',
   ['lead', 'stage', 'value', 'probability', 'assigned_to', 'next_action', 'status']));
 app.use('/api/meetings', crudRouter('meetings',
   ['title', 'participants', 'date', 'time', 'location', 'type', 'status']));
+// Meetings.jsx yig'ilish qatorini ochib, shu yerga eslatma/protokol yozadi — 'name' maydoni
+// orqali qaysi yig'ilishga tegishli ekani ?q= qidiruv bilan filtrlanadi.
+app.use('/api/meeting_notes', crudRouter('meeting_notes',
+  ['name', 'notes', 'status', 'date']));
 app.use('/api/teacher_kpi', crudRouter('teacher_kpi',
   ['teacher', 'period', 'students_count', 'avg_score', 'attendance_rate', 'rating', 'status']));
 app.use('/api/room_bookings', crudRouter('room_bookings',
