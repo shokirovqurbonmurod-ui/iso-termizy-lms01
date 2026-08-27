@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Plus, MapPin, Clock, ChevronDown, FileText } from 'lucide-react';
+import { Users, Plus, MapPin, Clock, ChevronDown, FileText, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { PageHeader, Spinner, Modal, Empty } from '../components/ui.jsx';
 
@@ -16,6 +16,7 @@ export default function Meetings() {
   const [openId, setOpenId] = useState(null);
   const [newNote, setNewNote] = useState('');
   const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ title: '', participants: '', date: new Date().toISOString().slice(0, 10), time: '10:00', location: '', type: 'Ichki' });
   const [saving, setSaving] = useState(false);
 
@@ -47,7 +48,14 @@ export default function Meetings() {
   }
 
   function openAdd() {
+    setEditing(null);
     setForm({ title: '', participants: '', date: new Date().toISOString().slice(0, 10), time: '10:00', location: '', type: 'Ichki' });
+    setModal(true);
+  }
+
+  function openEdit(m) {
+    setEditing(m);
+    setForm({ title: m.title || '', participants: m.participants || '', date: m.date || '', time: m.time || '10:00', location: m.location || '', type: m.type || 'Ichki' });
     setModal(true);
   }
 
@@ -55,10 +63,17 @@ export default function Meetings() {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      await api.post('/meetings', { ...form, status: 'planned' });
+      if (editing) await api.put(`/meetings/${editing.id}`, form);
+      else await api.post('/meetings', { ...form, status: 'planned' });
       setModal(false); await load();
     } catch (e) { alert(e.message); }
     setSaving(false);
+  }
+
+  async function remove(m) {
+    if (!confirm(`"${m.title}" yig'ilishini o'chirmoqchimisiz?`)) return;
+    try { await api.del(`/meetings/${m.id}`); await load(); }
+    catch (e) { alert(e.message); }
   }
 
   function MeetingRow({ m }) {
@@ -75,6 +90,12 @@ export default function Meetings() {
             </div>
           </div>
           <span className={`chip text-[9px] shrink-0 ${TYPE_COLOR[m.type] || 'bg-navy-100 text-navy-500'}`}>{m.type}</span>
+          <button onClick={(e) => { e.stopPropagation(); openEdit(m); }} className="grid place-items-center w-7 h-7 rounded-lg hover:bg-blue-50 text-navy-400 hover:text-blue-600 transition shrink-0" title="Tahrirlash">
+            <Pencil size={13} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); remove(m); }} className="grid place-items-center w-7 h-7 rounded-lg hover:bg-red-50 text-navy-400 hover:text-red-500 transition shrink-0" title="O'chirish">
+            <Trash2 size={13} />
+          </button>
           <ChevronDown size={16} className={`text-navy-400 transition shrink-0 ${open ? 'rotate-180' : ''}`} />
         </div>
         {open && (
@@ -122,10 +143,10 @@ export default function Meetings() {
         </>
       )}
 
-      <Modal open={modal} title="Yangi yig'ilish" onClose={() => setModal(false)}
+      <Modal open={modal} title={editing ? "Yig'ilishni tahrirlash" : "Yangi yig'ilish"} onClose={() => setModal(false)}
         footer={<>
           <button className="btn-ghost" onClick={() => setModal(false)}>Bekor qilish</button>
-          <button className="btn-gold" onClick={save} disabled={saving}>{saving ? 'Saqlanmoqda...' : "Qo'shish"}</button>
+          <button className="btn-gold" onClick={save} disabled={saving}>{saving ? 'Saqlanmoqda...' : editing ? 'Saqlash' : "Qo'shish"}</button>
         </>}
       >
         <label className="label">Mavzu</label>

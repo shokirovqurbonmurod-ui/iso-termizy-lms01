@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Plus, Users, Layers } from 'lucide-react';
+import { BookOpen, Plus, Users, Layers, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { PageHeader, Spinner, Modal, Empty } from '../components/ui.jsx';
 import { money } from '../lib/format.js';
@@ -8,6 +8,7 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState(null);
   const [enrollments, setEnrollments] = useState([]);
   const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', icon: '📘', level: 'A1', price: 0, modules_count: 0 });
   const [saving, setSaving] = useState(false);
 
@@ -24,7 +25,13 @@ export default function CoursesPage() {
   }, [enrollments]);
 
   function openAdd() {
+    setEditing(null);
     setForm({ name: '', icon: '📘', level: 'A1', price: 0, modules_count: 0 });
+    setModal(true);
+  }
+  function openEdit(c) {
+    setEditing(c);
+    setForm({ name: c.name || '', icon: c.icon || '📘', level: c.level || 'A1', price: c.price ?? 0, modules_count: c.modules_count ?? 0 });
     setModal(true);
   }
 
@@ -32,10 +39,18 @@ export default function CoursesPage() {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      await api.post('/courses', { ...form, price: Number(form.price) || 0, modules_count: Number(form.modules_count) || 0 });
+      const payload = { ...form, price: Number(form.price) || 0, modules_count: Number(form.modules_count) || 0 };
+      if (editing) await api.put(`/courses/${editing.id}`, payload);
+      else await api.post('/courses', payload);
       setModal(false); await load();
     } catch (e) { alert(e.message); }
     setSaving(false);
+  }
+
+  async function remove(c) {
+    if (!confirm(`"${c.name}" kursini o'chirmoqchimisiz?`)) return;
+    try { await api.del(`/courses/${c.id}`); await load(); }
+    catch (e) { alert(e.message); }
   }
 
   if (courses === null) return <Spinner />;
@@ -51,7 +66,11 @@ export default function CoursesPage() {
             <div key={c.id} className="card p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-3xl">{c.icon || '📘'}</div>
-                <span className="chip text-[10px] bg-gold/10 text-gold-700">{c.level}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="chip text-[10px] bg-gold/10 text-gold-700">{c.level}</span>
+                  <button onClick={() => openEdit(c)} className="grid place-items-center w-7 h-7 rounded-lg hover:bg-blue-50 text-navy-400 hover:text-blue-600 transition" title="Tahrirlash"><Pencil size={13} /></button>
+                  <button onClick={() => remove(c)} className="grid place-items-center w-7 h-7 rounded-lg hover:bg-red-50 text-navy-400 hover:text-red-500 transition" title="O'chirish"><Trash2 size={13} /></button>
+                </div>
               </div>
               <div className="font-display text-lg text-navy-800 mb-1">{c.name}</div>
               <div className="text-sm text-navy-500 mb-3">{c.price ? money(c.price) : 'Bepul'}</div>
@@ -64,7 +83,7 @@ export default function CoursesPage() {
         </div>
       )}
 
-      <Modal open={modal} title="Yangi kurs" onClose={() => setModal(false)}
+      <Modal open={modal} title={editing ? 'Kursni tahrirlash' : 'Yangi kurs'} onClose={() => setModal(false)}
         footer={<>
           <button className="btn-ghost" onClick={() => setModal(false)}>Bekor qilish</button>
           <button className="btn-gold" onClick={save} disabled={saving}>{saving ? 'Saqlanmoqda...' : "Qo'shish"}</button>

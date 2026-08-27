@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileSignature, Plus } from 'lucide-react';
+import { FileSignature, Plus, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { PageHeader, Spinner, Modal, Empty } from '../components/ui.jsx';
 import { money, statusStyle } from '../lib/format.js';
@@ -10,6 +10,7 @@ const empty = { title: '', party: '', start_date: today(), end_date: '', amount:
 export default function ContractsPage() {
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
 
@@ -26,14 +27,25 @@ export default function ContractsPage() {
     return (rows || []).filter((r) => r.status === 'active' && r.end_date && r.end_date <= limit).length;
   }, [rows]);
 
-  function openAdd() { setForm(empty); setModal(true); }
+  function openAdd() { setEditing(null); setForm(empty); setModal(true); }
+  function openEdit(c) { setEditing(c); setForm({ title: c.title || '', party: c.party || '', start_date: c.start_date || today(), end_date: c.end_date || '', amount: c.amount ?? 0, status: c.status || 'draft' }); setModal(true); }
 
   async function save() {
     if (!form.title.trim()) return;
     setSaving(true);
-    try { await api.post('/contracts', { ...form, amount: Number(form.amount) || 0 }); setModal(false); await load(); }
-    catch (e) { alert(e.message); }
+    try {
+      const payload = { ...form, amount: Number(form.amount) || 0 };
+      if (editing) await api.put(`/contracts/${editing.id}`, payload);
+      else await api.post('/contracts', payload);
+      setModal(false); await load();
+    } catch (e) { alert(e.message); }
     setSaving(false);
+  }
+
+  async function remove(c) {
+    if (!confirm(`"${c.title}" shartnomasini o'chirmoqchimisiz?`)) return;
+    try { await api.del(`/contracts/${c.id}`); await load(); }
+    catch (e) { alert(e.message); }
   }
 
   if (rows === null) return <Spinner />;
@@ -48,7 +60,7 @@ export default function ContractsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left bg-navy-50/50 border-b border-navy-100">
-                {['Shartnoma', 'Taraf', 'Boshlanish', 'Tugash', 'Summa', 'Holat'].map((h) => (
+                {['Shartnoma', 'Taraf', 'Boshlanish', 'Tugash', 'Summa', 'Holat', ''].map((h) => (
                   <th key={h} className="px-4 py-3 font-bold text-navy-500 text-xs uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -64,6 +76,12 @@ export default function ContractsPage() {
                     <td className={`px-4 py-3 text-xs ${expiring ? 'text-amber-600 font-bold' : 'text-navy-500'}`}>{c.end_date}{expiring && ' · tez orada tugaydi'}</td>
                     <td className="px-4 py-3 tabular-nums text-navy-700">{money(c.amount)}</td>
                     <td className="px-4 py-3"><span className={`chip text-[9px] ${statusStyle(c.status)}`}>{c.status}</span></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => openEdit(c)} className="grid place-items-center w-7 h-7 rounded-lg hover:bg-blue-50 text-navy-400 hover:text-blue-600 transition" title="Tahrirlash"><Pencil size={13} /></button>
+                        <button onClick={() => remove(c)} className="grid place-items-center w-7 h-7 rounded-lg hover:bg-red-50 text-navy-400 hover:text-red-500 transition" title="O'chirish"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -72,7 +90,7 @@ export default function ContractsPage() {
         </div>
       )}
 
-      <Modal open={modal} title="Shartnoma qo'shish" onClose={() => setModal(false)}
+      <Modal open={modal} title={editing ? 'Shartnomani tahrirlash' : "Shartnoma qo'shish"} onClose={() => setModal(false)}
         footer={<>
           <button className="btn-ghost" onClick={() => setModal(false)}>Bekor qilish</button>
           <button className="btn-gold" onClick={save} disabled={saving}>{saving ? 'Saqlanmoqda...' : 'Saqlash'}</button>
@@ -92,8 +110,21 @@ export default function ContractsPage() {
             <input className="input !py-2.5" type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
           </div>
         </div>
-        <label className="label">Summa</label>
-        <input className="input !py-2.5" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Summa</label>
+            <input className="input !py-2.5" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Holat</label>
+            <select className="input !py-2.5" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="draft">draft</option>
+              <option value="active">active</option>
+              <option value="expired">expired</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+          </div>
+        </div>
       </Modal>
     </div>
   );

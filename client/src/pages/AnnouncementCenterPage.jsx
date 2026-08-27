@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Megaphone, Plus, AlertCircle, Eye, Users2, GraduationCap, Globe2 } from 'lucide-react';
+import { Megaphone, Plus, AlertCircle, Eye, Users2, GraduationCap, Globe2, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { PageHeader, Spinner, Modal, Empty } from '../components/ui.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -19,6 +19,7 @@ export default function AnnouncementCenterPage() {
   const [groups, setGroups] = useState([]);
   const [courses, setCourses] = useState([]);
   const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
@@ -39,15 +40,29 @@ export default function AnnouncementCenterPage() {
 
   const unreadCount = useMemo(() => (rows || []).filter((r) => !r.read).length, [rows]);
 
-  function openAdd() { setForm(empty); setErr(''); setModal(true); }
+  function openAdd() { setEditing(null); setForm(empty); setErr(''); setModal(true); }
+  function openEdit(a) {
+    setEditing(a); setErr('');
+    setForm({ title: a.title || '', body: a.body || '', target_type: a.target_type || 'all', target_value: a.target_value || '', priority: a.priority || 'normal', date: a.date || empty.date });
+    setModal(true);
+  }
 
   async function save() {
     if (!form.title.trim()) { setErr('Sarlavha kerak.'); return; }
     if (form.target_type !== 'all' && !form.target_value) { setErr("Nishon (guruh/kurs) tanlang."); return; }
     setSaving(true); setErr('');
-    try { await api.post('/announcements', form); setModal(false); await load(); }
-    catch (e) { setErr(e.message); }
+    try {
+      if (editing) await api.put(`/announcements/${editing.id}`, form);
+      else await api.post('/announcements', form);
+      setModal(false); await load();
+    } catch (e) { setErr(e.message); }
     setSaving(false);
+  }
+
+  async function remove(a) {
+    if (!confirm(`"${a.title}" e'lonini o'chirmoqchimisiz?`)) return;
+    try { await api.del(`/announcements/${a.id}`); await load(); }
+    catch (e) { alert(e.message); }
   }
 
   async function openReads(a) {
@@ -92,9 +107,17 @@ export default function AnnouncementCenterPage() {
                     {a.author && <span>· {a.author}</span>}
                   </div>
                   {canSend && (
-                    <button onClick={(e) => { e.stopPropagation(); openReads(a); }} className="flex items-center gap-1 text-[10px] text-navy-400 hover:text-gold-600 transition">
-                      <Eye size={11} /> Kim o'qidi
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={(e) => { e.stopPropagation(); openReads(a); }} className="flex items-center gap-1 text-[10px] text-navy-400 hover:text-gold-600 transition">
+                        <Eye size={11} /> Kim o'qidi
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(a); }} className="grid place-items-center w-6 h-6 rounded-lg hover:bg-blue-50 text-navy-400 hover:text-blue-600 transition" title="Tahrirlash">
+                        <Pencil size={12} />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); remove(a); }} className="grid place-items-center w-6 h-6 rounded-lg hover:bg-red-50 text-navy-400 hover:text-red-500 transition" title="O'chirish">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -103,10 +126,10 @@ export default function AnnouncementCenterPage() {
         </div>
       )}
 
-      <Modal open={modal} title="Yangi e'lon" onClose={() => setModal(false)}
+      <Modal open={modal} title={editing ? "E'lonni tahrirlash" : "Yangi e'lon"} onClose={() => setModal(false)}
         footer={<>
           <button className="btn-ghost" onClick={() => setModal(false)}>Bekor qilish</button>
-          <button className="btn-gold" onClick={save} disabled={saving}>{saving ? 'Yuborilmoqda...' : "E'lon qilish"}</button>
+          <button className="btn-gold" onClick={save} disabled={saving}>{saving ? 'Saqlanmoqda...' : editing ? 'Saqlash' : "E'lon qilish"}</button>
         </>}
       >
         {err && <div className="mb-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 animate-fade">{err}</div>}
