@@ -59,9 +59,9 @@ export const MENU = [
       { key: 'lesson-library', label: 'Dars kutubxonasi', icon: Library, kind: 'lessonlibrary', roles: ['director','super_admin','admin','academic_manager','methodologist','teacher','senior_teacher','librarian'] },
       { key: 'room-booking', label: 'Xona bron', icon: DoorOpen, kind: 'roombooking', roles: ['director','super_admin','admin','academic_manager','reception','teacher','senior_teacher'] },
       { key: 'daily-journal', label: 'Kundalik jurnal', icon: NotebookPen, kind: 'dailyjournal', roles: ['founder','director','super_admin','branch_manager','academic_manager','admin','head_teacher','senior_teacher','teacher'] },
-      { key: 'attendance-center', label: 'Davomat markazi', icon: ClipboardCheck, kind: 'tabs', roles: ['director','super_admin','admin','academic_manager','reception','teacher','senior_teacher'], tabs: [
+      { key: 'attendance-center', label: 'Davomat markazi', icon: ClipboardCheck, kind: 'tabs', roles: ['director','super_admin','admin','academic_manager','reception','teacher','senior_teacher','student'], tabs: [
         { key: 'attendance-mark', label: 'Belgilash', icon: ClipboardCheck, kind: 'attmark', roles: ['director','super_admin','admin','academic_manager','reception','teacher','senior_teacher'] },
-        { key: 'attendance', label: 'Umumiy', icon: ClipboardCheck, kind: 'attendanceoverall', roles: ['director','super_admin','admin','academic_manager','reception','teacher','senior_teacher'] },
+        { key: 'attendance', label: 'Umumiy', icon: ClipboardCheck, kind: 'attendanceoverall', roles: ['director','super_admin','admin','academic_manager','reception','teacher','senior_teacher','student'] },
         { key: 'attendance-analytics', label: 'Analitika', icon: BarChart3, kind: 'attanalytics', roles: ['director','super_admin','admin','academic_manager'] },
       ] },
       { key: 'face-checkin', label: 'Yuz orqali kirish', icon: ScanFace, kind: 'facecheckin', roles: ['director','super_admin','admin','academic_manager','reception','teacher','senior_teacher'] },
@@ -86,7 +86,7 @@ export const MENU = [
       { key: 'essays', label: 'Esselar', icon: FileText, kind: 'essayspage', roles: ['director','super_admin','admin','academic_manager','methodologist','teacher','senior_teacher','student'] },
       { key: 'quizzes', label: 'Testlar & Quiz', icon: ListChecks, kind: 'quizzespage', roles: ['director','super_admin','admin','academic_manager','methodologist','teacher','senior_teacher','student'] },
       { key: 'homework-review', label: 'Vazifa tekshiruvi', icon: FileCheck2, kind: 'homeworkreview', roles: ['director','super_admin','admin','academic_manager','teacher','senior_teacher'] },
-      { key: 'mock-exams', label: 'Mock imtihonlar', icon: FileCheck2, kind: 'mockexams', roles: ['director','super_admin','admin','academic_manager','teacher','senior_teacher'] },
+      { key: 'mock-exams', label: 'Mock imtihonlar', icon: FileCheck2, kind: 'mockexams', roles: ['director','super_admin','admin','academic_manager','teacher','senior_teacher','student'] },
       { key: 'exam-results', label: 'Imtihon natijalari', icon: Award, kind: 'resource', resource: 'exam_results', roles: ['director','super_admin','admin','academic_manager','teacher','senior_teacher','student'] },
       { key: 'grade-book', label: 'Baholar kitobi', icon: BookOpen, kind: 'tabs', roles: null, tabs: [
         { key: 'grade-book-main', label: 'Baholar', icon: BookOpen, kind: 'gradebook', roles: null },
